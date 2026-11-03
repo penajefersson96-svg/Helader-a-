@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#38bdf8">
+  <title>Mi Heladería</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- MENÚ LATERAL (en celular pasa abajo) -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo"><i data-lucide="ice-cream-cone"></i></div>
+        <div class="brand-text">
+          <strong>Mi Heladería</strong>
+          <span>Control de negocio</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-view="dashboard">
+          <i data-lucide="layout-dashboard"></i><span>Inicio</span>
+        </button>
+        <button class="nav-item" data-view="inventario">
+          <i data-lucide="package"></i><span>Mercancía</span>
+        </button>
+        <button class="nav-item" data-view="ventas">
+          <i data-lucide="shopping-bag"></i><span>Ventas</span>
+        </button>
+        <button class="nav-item" data-view="fiados">
+          <i data-lucide="handshake"></i><span>Fiados</span>
+        </button>
+        <button class="nav-item" data-view="caja">
+          <i data-lucide="wallet"></i><span>Caja</span>
+        </button>
+        <button class="nav-item" data-view="calculadora">
+          <i data-lucide="calculator"></i><span>Dólar</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- CONTENIDO -->
+    <main class="main">
+
+      <!-- BARRA SUPERIOR -->
+      <header class="topbar">
+        <div>
+          <h1 id="view-title">Inicio</h1>
+          <p id="view-subtitle">Resumen de tu negocio</p>
+        </div>
+        <button class="rate-chip" id="rate-chip" title="Cambiar tasa BCV">
+          <i data-lucide="dollar-sign"></i>
+          <span>BCV</span>
+          <strong id="rate-value">-- Bs</strong>
+        </button>
+      </header>
+
+      <!-- VISTAS: cada archivo JS llena su propio contenedor -->
+      <section class="view active" id="view-dashboard">
+        <div id="dashboard-content"></div>
+      </section>
+
+      <section class="view" id="view-inventario">
+        <div id="inventario-content"></div>
+      </section>
+
+      <section class="view" id="view-ventas">
+        <div id="ventas-content"></div>
+      </section>
+
+      <section class="view" id="view-fiados">
+        <div id="fiados-content"></div>
+      </section>
+
+      <section class="view" id="view-caja">
+        <div id="caja-content"></div>
+      </section>
+
+      <section class="view" id="view-calculadora">
+        <div id="calculadora-content"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Ventana emergente (formularios) -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 id="modal-title"></h3>
+        <button class="icon-btn" id="modal-close" aria-label="Cerrar">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Avisos -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Iconos -->
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+
+  <!-- Código (el orden importa) -->
+  <script src="js/utils.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/tasa.js"></script>
+  <script src="js/inventario.js"></script>
+  <script src="js/ventas.js"></script>
+  <script src="js/fiados.js"></script>
+  <script src="js/caja.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
