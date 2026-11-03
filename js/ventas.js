@@ -1,8 +1,9 @@
 /* =========================================================
    VENTAS - Registrar ventas (al detal o a negocios)
    Cada venta guarda:
-   { productoId, nombre, cantidad, precioUnit, total, costoUnit,
-     tipo: 'detal'|'negocio', cliente, fiado, fechaPago, pagado, fecha, tasa }
+   { productoId, nombre, cantidad, precioUnit (USD), total (USD), costoUnit,
+     moneda, precioOrig, tipo: 'detal'|'negocio', cliente,
+     fiado, fechaPago, pagado, fecha, tasa }
    Las existencias se calculan solas a partir de las ventas.
    ========================================================= */
 
@@ -42,26 +43,32 @@ const Ventas = {
             <input name="cantidad" type="text" inputmode="decimal" placeholder="1" value="1">
           </div>
           <div class="field">
-            <label>Precio ($ c/u)</label>
-            <input name="precio" type="text" inputmode="decimal" placeholder="0,00">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="field">
             <label>Tipo de venta</label>
             <select name="tipo">
               <option value="detal">Al detal</option>
-              <option value="negocio">A un negocio (al mayor)</option>
+              <option value="negocio">A un negocio (mayor)</option>
             </select>
           </div>
-          <div class="field">
-            <label>Forma de pago</label>
-            <select name="pago">
-              <option value="contado">De contado</option>
-              <option value="fiado">Fiado</option>
+        </div>
+
+        <div class="field">
+          <label>Precio c/u</label>
+          <div class="input-group">
+            <input name="precio" type="text" inputmode="decimal" placeholder="0,00">
+            <select name="moneda">
+              <option value="USD">$</option>
+              <option value="BS">Bs</option>
             </select>
           </div>
+          <span class="hint">Si haces una rebaja, solo cambia el precio aquí.</span>
+        </div>
+
+        <div class="field">
+          <label>Forma de pago</label>
+          <select name="pago">
+            <option value="contado">De contado</option>
+            <option value="fiado">Fiado</option>
+          </select>
         </div>
 
         <div class="field">
@@ -96,32 +103,68 @@ const Ventas = {
       const cliLabel = body.querySelector('#cliente-label');
 
       const productoActual = () => disponibles.find(d => d.p.id === f.producto.value);
+      const redondea = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
+      let monedaActual = 'USD';
+
+      // Precio en dólares según lo que esté escrito y la moneda elegida
+      const precioUsd = () => {
+        const v = Utils.num(f.precio.value);
+        return monedaActual === 'BS' ? Tasa.toUsd(v) : v;
+      };
 
       const actualizar = () => {
-        const total = Utils.num(f.cantidad.value) * Utils.num(f.precio.value);
-        const d = productoActual();
-        const gan = total - Utils.num(f.cantidad.value) * d.p.costo;
+        const cant = Utils.num(f.cantidad.value);
+        const totalUsd = cant * precioUsd();
+        const gan = totalUsd - cant * productoActual().p.costo;
         prev.innerHTML = `
-          <div><span>Total</span><b>${Utils.usd(total)}</b></div>
-          <div><span>En bolívares</span><b>${Utils.bs(Tasa.toBs(total))}</b></div>
+          <div><span>Total en dólares</span><b>${Utils.usd(totalUsd)}</b></div>
+          <div><span>Total en bolívares</span><b>${Utils.bs(Tasa.toBs(totalUsd))}</b></div>
           <div><span>Ganancia de esta venta</span><b>${Utils.usd(gan)}</b></div>`;
       };
+
+      // Pone el precio del producto (detal o mayor) en la moneda elegida
+      const precioSugerido = () => {
+        const prod = productoActual().p;
+        const usd = f.tipo.value === 'negocio' ? Inventario.precioMayor(prod) : Inventario.precioDetal(prod);
+        f.precio.value = monedaActual === 'BS' ? redondea(Tasa.toBs(usd), 2) : redondea(usd, 4);
+      };
+
+      // Al elegir producto, usa la moneda en que tiene puesto el precio
+      const elegirProducto = () => {
+        const quiereBs = productoActual().p.precioMoneda === 'BS' && Tasa.valor() > 0;
+        monedaActual = quiereBs ? 'BS' : 'USD';
+        f.moneda.value = monedaActual;
+        precioSugerido();
+      };
+
+      f.producto.addEventListener('change', () => { elegirProducto(); actualizar(); });
+      f.tipo.addEventListener('change', () => { precioSugerido(); actualizar(); });
+
+      // Al cambiar $ <-> Bs se convierte el monto que ya está escrito
+      f.moneda.addEventListener('change', () => {
+        const nueva = f.moneda.value;
+        const t = Tasa.valor();
+        if (nueva === 'BS' && t <= 0) {
+          f.moneda.value = 'USD';
+          return UI.toast('Primero guarda la tasa BCV (sección Dólar)', 'error');
+        }
+        const v = Utils.num(f.precio.value);
+        if (nueva !== monedaActual && v > 0) {
+          f.precio.value = nueva === 'BS' ? redondea(v * t, 2) : redondea(v / t, 4);
+        }
+        monedaActual = nueva;
+        actualizar();
+      });
 
       const fiadoCambio = () => {
         const esFiado = f.pago.value === 'fiado';
         fechaBox.classList.toggle('hidden', !esFiado);
         cliLabel.textContent = esFiado ? 'Cliente o negocio (obligatorio)' : 'Cliente o negocio (opcional)';
       };
-
-      // Al cambiar de producto, se coloca su precio de venta
-      f.producto.addEventListener('change', () => {
-        f.precio.value = productoActual().p.precio;
-        actualizar();
-      });
-      f.precio.value = productoActual().p.precio;
-
-      f.addEventListener('input', actualizar);
       f.pago.addEventListener('change', fiadoCambio);
+      f.addEventListener('input', actualizar);
+
+      elegirProducto();
       actualizar();
       fiadoCambio();
 
@@ -129,13 +172,14 @@ const Ventas = {
         e.preventDefault();
         const { p, s } = productoActual();
         const cantidad = Utils.num(f.cantidad.value);
-        const precioUnit = Utils.num(f.precio.value);
+        const precioOrig = Utils.num(f.precio.value);
+        const precioUnit = precioUsd();
         const fiado = f.pago.value === 'fiado';
         const cliente = f.cliente.value.trim();
 
         if (cantidad <= 0) return UI.toast('Escribe la cantidad', 'error');
         if (cantidad > s.restante) return UI.toast(`Solo quedan ${Inventario.q(s.restante)}`, 'error');
-        if (precioUnit <= 0) return UI.toast('Escribe el precio', 'error');
+        if (precioOrig <= 0 || precioUnit <= 0) return UI.toast('Escribe el precio', 'error');
         if (fiado && !cliente) return UI.toast('Escribe a quién le fías', 'error');
         if (fiado && !f.fechaPago.value) return UI.toast('Elige el día de pago', 'error');
 
@@ -146,6 +190,8 @@ const Ventas = {
           precioUnit,
           total: cantidad * precioUnit,
           costoUnit: p.costo,
+          moneda: monedaActual,
+          precioOrig,
           tipo: f.tipo.value,
           cliente,
           fiado,
@@ -236,7 +282,7 @@ Modules.ventas = {
   },
 
   card(v) {
-    // Si está fiada y sin pagar se muestra con la tasa de hoy; si no, con la tasa del día de la venta
+    // Fiado sin pagar: se muestra con la tasa de hoy. Lo demás, con la tasa del día de la venta.
     const tasa = (v.fiado && !v.pagado) ? Tasa.valor() : (v.tasa || Tasa.valor());
     const gan = v.total - v.cantidad * v.costoUnit;
 
