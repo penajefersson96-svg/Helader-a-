@@ -5,29 +5,30 @@
    ========================================================= */
 
 Modules.dashboard = {
-  
+
   render(container) {
     const hoy = Utils.today();
     const ventas = Store.all('ventas');
     const productos = Store.all('productos');
     const suma = (arr, fn) => arr.reduce((a, x) => a + fn(x), 0);
     const gan = v => v.total - v.cantidad * v.costoUnit;
-    
+
     // Hoy
     const deHoy = ventas.filter(v => v.fecha === hoy);
     const totalHoy = suma(deHoy, v => v.total);
     const ganHoy = suma(deHoy, gan);
-    
-    // Este mes: ganancia de ventas menos gastos manuales (sin contar la compra de mercancía)
+
+    // Este mes: ganancia de ventas menos gastos manuales y pérdidas (sin contar la compra de mercancía)
     const mesDesde = Caja.desde('mes');
     const ganMes = suma(ventas.filter(v => v.fecha >= mesDesde), gan);
     const gastosMes = suma(
-      Store.all('movimientos').filter(m => m.tipo === 'gasto' && m.fecha >= mesDesde),
+      Store.all('movimientos').filter(m => m.tipo === 'gasto' && m.fecha >= mesDesde && m.categoria !== 'Ajuste de caja'),
       m => (m.moneda === 'BS' ? Tasa.toUsd(m.monto) : m.monto)
     );
-    const neta = ganMes - gastosMes;
+    const perdidasMes = suma(Store.all('mermas').filter(m => m.fecha >= mesDesde), m => m.costo);
+    const neta = ganMes - gastosMes - perdidasMes;
     const nombreMes = new Date().toLocaleDateString('es-VE', { month: 'long' });
-    
+
     // Caja y fiados
     const saldo = Caja.saldo(Caja.movimientos());
     const saldoBs = saldo.BS + Tasa.toBs(saldo.USD);
@@ -35,7 +36,7 @@ Modules.dashboard = {
     const porCobrar = suma(deudas, i => Fiados.eqUsd(i.pendiente, i.moneda));
     const urgentes = deudas.filter(i => i.dias <= 3)
       .sort((a, b) => a.fechaPago.localeCompare(b.fechaPago)).slice(0, 5);
-    
+
     // Poco stock (agrupado por nombre, por si hay varias compras del mismo producto)
     const grupos = {};
     productos.forEach(p => {
@@ -48,7 +49,7 @@ Modules.dashboard = {
     const bajos = Object.values(grupos)
       .filter(g => g.restante > 0 && g.restante <= g.maxLote * 0.2)
       .sort((a, b) => a.restante - b.restante).slice(0, 5);
-    
+
     // Últimos 7 días
     const dias = [];
     const nombresDia = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -56,17 +57,21 @@ Modules.dashboard = {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const iso = Utils.toISODate(d);
-      dias.push({ iso, label: nombresDia[d.getDay()], total: suma(ventas.filter(v => v.fecha === iso), v => v.total), hoy: i === 0 });
+      dias.push({
+        iso, label: nombresDia[d.getDay()],
+        total: suma(ventas.filter(v => v.fecha === iso), v => v.total),
+        hoy: i === 0
+      });
     }
     const maxDia = Math.max(...dias.map(d => d.total), 1);
-    
+
     // Avisos de tasa y respaldo
     const tasa = Store.getTasa();
     const tasaVieja = !(tasa.valor > 0) || tasa.fecha !== hoy;
     const ultimo = Store.get('ultimoRespaldo', null);
     const diasSinRespaldo = ultimo ? -Utils.daysUntil(ultimo) : null;
     const respaldoPendiente = productos.length + ventas.length > 0 && (ultimo === null || diasSinRespaldo >= 7);
-    
+
     container.innerHTML = `
       ${tasaVieja ? `
         <div class="card" style="background:var(--warning-soft);border-color:#fde68a;margin-bottom:16px">
@@ -80,6 +85,8 @@ Modules.dashboard = {
         <button class="btn btn-primary" data-action="venta"><i data-lucide="shopping-cart"></i> Nueva venta</button>
         <button class="btn btn-soft" data-action="gasto"><i data-lucide="minus-circle"></i> Registrar gasto</button>
         <button class="btn btn-soft" data-action="mercancia"><i data-lucide="package-plus"></i> Agregar mercancía</button>
+        <button class="btn btn-soft" data-action="cierre"><i data-lucide="calendar-check"></i> Cerrar el día</button>
+        <button class="btn btn-soft" data-action="reportes"><i data-lucide="bar-chart-3"></i> Reportes</button>
       </div>
 
       <div class="grid grid-4">
@@ -108,6 +115,7 @@ Modules.dashboard = {
           <div class="stack" style="gap:10px">
             <div class="row-between"><span class="muted">Ganancia en ventas</span><b>${Utils.usd(ganMes)}</b></div>
             <div class="row-between"><span class="muted">Gastos (sin contar mercancía)</span><b>− ${Utils.usd(gastosMes)}</b></div>
+            <div class="row-between"><span class="muted">Pérdidas (mermas)</span><b>− ${Utils.usd(perdidasMes)}</b></div>
             <div class="row-between" style="border-top:1px dashed var(--border);padding-top:10px">
               <b>Ganancia neta</b>
               <b class="profit ${neta >= 0 ? 'positive' : 'negative'}">${Utils.usd(neta)}</b>
@@ -166,7 +174,7 @@ Modules.dashboard = {
         </div>
       </div>
     `;
-    
+
     container.onclick = e => {
       const go = e.target.closest('[data-go]');
       if (go) return App.go(go.dataset.go);
@@ -176,10 +184,12 @@ Modules.dashboard = {
       if (a === 'venta') Ventas.openSale();
       if (a === 'gasto') Caja.form('gasto');
       if (a === 'mercancia') Modules.inventario.form('nuevo');
+      if (a === 'cierre') Cierre.abrir();
+      if (a === 'reportes') App.go('reportes');
       if (a === 'respaldar') this.respaldo(false);
       if (a === 'compartir') this.respaldo(true);
     };
-    
+
     container.onchange = e => {
       if (e.target.id === 'imp-file' && e.target.files[0]) {
         this.restaurar(e.target.files[0]);
@@ -187,7 +197,7 @@ Modules.dashboard = {
       }
     };
   },
-  
+
   stat(icon, label, value, sub, tone = '') {
     return `
       <div class="card stat">
@@ -197,18 +207,18 @@ Modules.dashboard = {
         <span class="stat-sub">${sub}</span>
       </div>`;
   },
-  
+
   /* ---------- Respaldo ---------- */
   respaldo(compartir) {
     const nombre = `respaldo-heladeria-${Utils.today()}.json`;
     const file = new File([Store.exportAll()], nombre, { type: 'application/json' });
     const marcar = () => Store.set('ultimoRespaldo', Utils.today());
-    
+
     if (compartir && navigator.canShare && navigator.canShare({ files: [file] })) {
       navigator.share({ files: [file], title: 'Respaldo Mi Heladería' }).then(marcar).catch(() => {});
       return;
     }
-    
+
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
@@ -220,7 +230,7 @@ Modules.dashboard = {
     marcar();
     UI.toast('Respaldo descargado');
   },
-  
+
   restaurar(file) {
     const lector = new FileReader();
     lector.onload = () => {

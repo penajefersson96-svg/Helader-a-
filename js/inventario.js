@@ -7,6 +7,7 @@
      costoMoneda ('USD'|'BS'), costoOriginal, tasaCompra,
      precioMoneda ('USD'|'BS'), precioDetalOrig, precioMayorOrig
    }
+   Las existencias = cantidad - vendidos - pérdidas (mermas).
    ========================================================= */
 
 const Inventario = {
@@ -124,15 +125,19 @@ const Inventario = {
 
   costoTotal(p) { return p.costoTotal ?? p.cantidad * p.costo; },
 
+  // Números de un lote: ventas y pérdidas (mermas) incluidas
   stats(p, ventas) {
     const mias = ventas.filter(v => v.productoId === p.id);
     const vendidos = mias.reduce((a, v) => a + v.cantidad, 0);
     const ingresos = mias.reduce((a, v) => a + v.total, 0);
-    const restante = Math.round((p.cantidad - vendidos) * 1000) / 1000;
+    const perdidos = Store.all('mermas')
+      .filter(m => m.productoId === p.id)
+      .reduce((a, m) => a + m.cantidad, 0);
+    const restante = Math.round((p.cantidad - vendidos - perdidos) * 1000) / 1000;
     const invertido = this.costoTotal(p);
     return {
-      vendidos, ingresos, restante, invertido,
-      gananciaActual: ingresos - vendidos * p.costo,
+      vendidos, perdidos, ingresos, restante, invertido,
+      gananciaActual: ingresos - (vendidos + perdidos) * p.costo,
       gananciaFinal: ingresos - invertido,
       gananciaEsperada: p.cantidad * (this.precioDetal(p) - p.costo),
       terminado: restante <= 0
@@ -178,6 +183,7 @@ Modules.inventario = {
         <button class="btn btn-primary" data-action="nuevo"><i data-lucide="plus"></i> Agregar mercancía</button>
         <button class="btn btn-soft" data-action="categorias"><i data-lucide="tags"></i> Categorías</button>
         <button class="btn btn-soft" data-action="catalogo"><i data-lucide="book-open"></i> Catálogo</button>
+        <button class="btn btn-soft" data-action="perdidas"><i data-lucide="package-x"></i> Pérdidas</button>
         <span class="spacer"></span>
         <select id="f-cat">
           <option value="todas">Todas las categorías</option>
@@ -204,9 +210,11 @@ Modules.inventario = {
       if (accion === 'nuevo') this.form('nuevo');
       if (accion === 'categorias') Inventario.abrirCategorias();
       if (accion === 'catalogo') App.go('catalogo');
+      if (accion === 'perdidas') Mermas.lista();
       if (accion === 'editar' && p) this.form('editar', p);
       if (accion === 'recomprar' && p) this.form('recomprar', p);
       if (accion === 'vender' && p) Ventas.openSale(p.id);
+      if (accion === 'merma' && p) Mermas.nueva(p.id);
       if (accion === 'borrar' && p) this.borrar(p);
     };
 
@@ -255,7 +263,7 @@ Modules.inventario = {
   },
 
   card({ p, s }) {
-    const pct = Math.min(100, (s.vendidos / p.cantidad) * 100 || 0);
+    const pct = Math.min(100, ((s.vendidos + s.perdidos) / p.cantidad) * 100 || 0);
     const detal = Inventario.precioDetal(p);
     const mayor = Inventario.precioMayor(p);
     const margen = detal - p.costo;
@@ -279,6 +287,7 @@ Modules.inventario = {
           <div class="progress"><span style="width:${pct}%"></span></div>
           <div class="item-meta" style="margin-top:6px">
             Vendidos <b>${Inventario.q(s.vendidos)}</b> de <b>${Inventario.q(p.cantidad)}</b>
+            ${s.perdidos > 0 ? ` · perdidos <b class="neg">${Inventario.q(s.perdidos)}</b>` : ''}
           </div>
         </div>
 
@@ -298,6 +307,7 @@ Modules.inventario = {
           <div class="item-actions">
             ${!s.terminado ? `<button class="btn btn-primary btn-sm" data-action="vender" data-id="${p.id}"><i data-lucide="shopping-cart"></i> Vender</button>` : ''}
             <button class="btn btn-soft btn-sm" data-action="recomprar" data-id="${p.id}"><i data-lucide="repeat"></i> Recomprar</button>
+            ${!s.terminado ? `<button class="icon-btn" data-action="merma" data-id="${p.id}" aria-label="Registrar pérdida"><i data-lucide="package-x"></i></button>` : ''}
             <button class="icon-btn" data-action="editar" data-id="${p.id}" aria-label="Editar"><i data-lucide="pencil"></i></button>
             <button class="icon-btn" data-action="borrar" data-id="${p.id}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
           </div>
@@ -449,9 +459,10 @@ Modules.inventario = {
         };
 
         if (modo === 'editar') {
-          const vendidos = Inventario.stats(p, Store.all('ventas')).vendidos;
-          if (cantidad < vendidos) {
-            return UI.toast(`Ya vendiste ${Inventario.q(vendidos)}, la cantidad no puede ser menor`, 'error');
+          const st = Inventario.stats(p, Store.all('ventas'));
+          const usados = st.vendidos + st.perdidos;
+          if (cantidad < usados) {
+            return UI.toast(`Ya vendiste o perdiste ${Inventario.q(usados)}, la cantidad no puede ser menor`, 'error');
           }
         }
 
@@ -476,6 +487,7 @@ Modules.inventario = {
       : `¿Borrar "${p.nombre}"?`;
     if (!UI.confirm(aviso)) return;
     Store.set('ventas', Store.all('ventas').filter(v => v.productoId !== p.id));
+    Store.set('mermas', Store.all('mermas').filter(m => m.productoId !== p.id));
     Store.remove('productos', p.id);
     UI.toast('Mercancía borrada');
   }

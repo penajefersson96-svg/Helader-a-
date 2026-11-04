@@ -488,3 +488,6 @@ html, body { overflow-x: hidden; }
 .check-row small { display: block; color: var(--text-soft); }
 .check-row > b { white-space: nowrap; }
 a.btn { text-decoration: none; }
+/* ---------- Cierre y pérdidas ---------- */
+.pos { color: var(--success); }
+.neg { color: var(--danger); }
