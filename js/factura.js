@@ -183,25 +183,31 @@ const Factura = {
   },
 
   /* ---------- Ver / descargar / compartir ---------- */
-  ver(id) {
+    ver(id) {
     const fac = Store.find('facturas', id);
     if (!fac) return;
-
+    
     const html = `
       <div class="catalog-preview" style="padding:0"><canvas id="fac-canvas"></canvas></div>
       <div class="row mt">
-        <button class="btn btn-primary" data-a="descargar"><i data-lucide="download"></i> Descargar</button>
+        <button class="btn btn-primary" data-a="imprimir"><i data-lucide="printer"></i> Imprimir</button>
+        <button class="btn btn-soft" data-a="descargar"><i data-lucide="download"></i> Descargar</button>
         <button class="btn btn-soft" data-a="compartir"><i data-lucide="share-2"></i> Compartir</button>
         <button class="btn btn-danger" data-a="anular"><i data-lucide="x-circle"></i> Anular</button>
-      </div>`;
-
+      </div>
+      ${Imprimir.selector()}`;
+    
     UI.openModal('Factura N° ' + this.num(fac.numero), html, body => {
       const canvas = body.querySelector('#fac-canvas');
       this.dibujar(canvas, fac);
-
+      
+      body.onchange = e => {
+        if (e.target.matches('[data-papel]')) Imprimir.cambiar(e.target.value);
+      };
       body.onclick = e => {
         const b = e.target.closest('[data-a]');
         if (!b) return;
+        if (b.dataset.a === 'imprimir') Imprimir.imagen(canvas, 'Factura ' + this.num(fac.numero));
         if (b.dataset.a === 'descargar') this.descargar(canvas, fac);
         if (b.dataset.a === 'compartir') this.compartir(canvas, fac);
         if (b.dataset.a === 'anular' && UI.confirm('¿Anular esta factura? Sus ventas quedan libres para facturarlas de nuevo.')) {

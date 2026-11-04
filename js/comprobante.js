@@ -5,24 +5,31 @@
 
 const Comprobante = {
 
-  cierre(fecha) {
+    cierre(fecha) {
     const c = Store.all('cierres').find(x => x.fecha === fecha);
     if (!c) return UI.toast('Primero guarda el cierre', 'error');
-
+    
     const html = `
       <div class="catalog-preview" style="padding:0"><canvas id="comp-canvas"></canvas></div>
       <div class="row mt">
-        <button class="btn btn-primary" data-a="descargar"><i data-lucide="download"></i> Descargar</button>
+        <button class="btn btn-primary" data-a="imprimir"><i data-lucide="printer"></i> Imprimir</button>
+        <button class="btn btn-soft" data-a="descargar"><i data-lucide="download"></i> Descargar</button>
         <button class="btn btn-soft" data-a="compartir"><i data-lucide="share-2"></i> Compartir</button>
-      </div>`;
-
+      </div>
+      ${Imprimir.selector()}`;
+    
     UI.openModal('Comprobante de cierre', html, body => {
       const canvas = body.querySelector('#comp-canvas');
       this.dibujar(canvas, c);
       const nombre = `cierre-${c.fecha}.png`;
+      
+      body.onchange = e => {
+        if (e.target.matches('[data-papel]')) Imprimir.cambiar(e.target.value);
+      };
       body.onclick = e => {
         const b = e.target.closest('[data-a]');
         if (!b) return;
+        if (b.dataset.a === 'imprimir') Imprimir.imagen(canvas, 'Cierre ' + c.fecha);
         if (b.dataset.a === 'descargar') this.descargar(canvas, nombre);
         if (b.dataset.a === 'compartir') this.compartir(canvas, nombre);
       };

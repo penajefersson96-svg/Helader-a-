@@ -426,6 +426,7 @@ Modules.ventas = {
 
       <div class="toolbar mt">
         <button class="btn btn-primary" data-action="nueva"><i data-lucide="plus"></i> Nueva venta</button>
+        <button class="icon-btn" data-action="devoluciones" aria-label="Ver devoluciones"><i data-lucide="undo-2"></i></button>
         <span class="spacer"></span>
         <select id="f-venta">
           <option value="todas" ${this.filtro === 'todas' ? 'selected' : ''}>Todas</option>
@@ -447,6 +448,9 @@ Modules.ventas = {
       if (!btn) return;
       const a = btn.dataset.action;
       if (a === 'nueva') Ventas.openSale();
+            if (a === 'editar') EditarVenta.abrir(btn.dataset.ids.split(','));
+      if (a === 'devolver') Devoluciones.nueva(btn.dataset.ids.split(','));
+      if (a === 'devoluciones') Devoluciones.lista();
       if (a === 'factura') {
         if (btn.dataset.ticket) Factura.deTicket(btn.dataset.ticket);
         else Factura.nuevaDesdeVenta(btn.dataset.id);
@@ -468,28 +472,33 @@ Modules.ventas = {
     };
   },
 
-  card(g) {
+    card(g) {
     const L = g.lineas;
     const v = L[0];
     const total = L.reduce((a, x) => a + x.total, 0);
     const gan = L.reduce((a, x) => a + (x.total - x.cantidad * x.costoUnit), 0);
     const debe = v.fiado && L.some(x => !x.pagado);
     const pendiente = L.find(x => !x.pagado) || v;
+    const devuelta = L.every(x => x.cantidad <= 0);
+    const devueltoQ = L.reduce((a, x) => a + (x.devuelto || 0), 0);
     // Fiado sin pagar: tasa de hoy. Lo demás, la tasa del día de la venta.
     const tasa = debe ? Tasa.valor() : (v.tasa || Tasa.valor());
     const pagoTxt = v.pagoMoneda ? ' · ' + (v.pagoMoneda === 'BS' ? 'Bs' : '$') : '';
-
-    const titulo = L.length === 1
-      ? `${Utils.esc(v.nombre)} × ${Inventario.q(v.cantidad)}`
-      : `${L.length} productos`;
-    const detalle = L.length > 1
-      ? `<div class="muted" style="font-size:.85rem;margin-top:6px">${L.map(x => `${Utils.esc(x.nombre)} × ${Inventario.q(x.cantidad)}`).join(' · ')}</div>`
-      : '';
-
-    const botonFactura = g.ticket
-      ? `<button class="icon-btn" data-action="factura" data-ticket="${g.ticket}" aria-label="Factura"><i data-lucide="file-text"></i></button>`
-      : (v.cliente ? `<button class="icon-btn" data-action="factura" data-id="${v.id}" aria-label="Factura"><i data-lucide="file-text"></i></button>` : '');
-
+    
+    const vivas = L.filter(x => x.cantidad > 0);
+    const mostrar = vivas.length ? vivas : L;
+    const titulo = mostrar.length === 1 ?
+      `${Utils.esc(mostrar[0].nombre)} × ${Inventario.q(mostrar[0].cantidad)}` :
+      `${mostrar.length} productos`;
+    const detalle = mostrar.length > 1 ?
+      `<div class="muted" style="font-size:.85rem;margin-top:6px">${mostrar.map(x => `${Utils.esc(x.nombre)} × ${Inventario.q(x.cantidad)}`).join(' · ')}</div>` :
+      '';
+    
+    const ids = L.map(x => x.id).join(',');
+    const botonFactura = g.ticket ?
+      `<button class="icon-btn" data-action="factura" data-ticket="${g.ticket}" aria-label="Factura"><i data-lucide="file-text"></i></button>` :
+      (v.cliente ? `<button class="icon-btn" data-action="factura" data-id="${v.id}" aria-label="Factura"><i data-lucide="file-text"></i></button>` : '');
+    
     return `
       <div class="card item">
         <div class="item-head">
@@ -514,13 +523,18 @@ Modules.ventas = {
                   ? `<span class="badge badge-warning">Debe · paga ${Utils.formatDate(pendiente.fechaPago)}</span>`
                   : '<span class="badge badge-success">Fiado pagado</span>')
               : `<span class="badge badge-success">Contado${pagoTxt}</span>`}
+            ${devuelta
+              ? '<span class="badge badge-warning">Devuelta</span>'
+              : (devueltoQ > 0 ? `<span class="badge badge-warning">Devolvió ${Inventario.q(devueltoQ)}</span>` : '')}
             <span class="muted" style="font-size:.8rem">Ganancia ${Utils.usd(gan)}</span>
           </div>
           <div class="item-actions">
             ${botonFactura}
-            <button class="icon-btn" data-action="borrar" data-ids="${L.map(x => x.id).join(',')}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
+            <button class="icon-btn" data-action="editar" data-ids="${ids}" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            ${devuelta ? '' : `<button class="icon-btn" data-action="devolver" data-ids="${ids}" aria-label="Devolver"><i data-lucide="undo-2"></i></button>`}
+            <button class="icon-btn" data-action="borrar" data-ids="${ids}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
           </div>
         </div>
       </div>`;
   }
-};
+  };
