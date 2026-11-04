@@ -275,7 +275,8 @@ const Factura = {
       await document.fonts.load(`500 20px ${F}`);
     } catch (e) { /* usa la letra del sistema */ }
 
-    const negocio = Store.get('config', {}).negocio || 'Mi Heladería';
+    const cfg = Store.get('config', {});
+    const negocio = cfg.negocio || 'Mi Negocio';
     const W = 720, PAD = 32, S = 2;
     const HEAD = 130, ROW = 52;
 
@@ -310,6 +311,11 @@ const Factura = {
     ctx.fillText(this.ajustar(ctx, negocio, W - PAD * 2 - 170), PAD, 58);
     ctx.font = `600 17px ${F}`;
     ctx.fillText('Nota de entrega N° ' + this.num(fac.numero), PAD, 92);
+        const datosNeg = [cfg.rif ? 'RIF ' + cfg.rif : '', cfg.telefono ? 'Tel. ' + cfg.telefono : ''].filter(Boolean).join(' · ');
+    if (datosNeg) {
+      ctx.font = `500 14px ${F}`;
+      ctx.fillText(this.ajustar(ctx, datosNeg, W - PAD * 2 - 170), PAD, 116);
+    }
     ctx.textAlign = 'right';
     ctx.font = `700 17px ${F}`;
     ctx.fillText(Utils.formatDate(fac.fecha), W - PAD, 58);
@@ -407,7 +413,7 @@ const Factura = {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#0284c7';
     ctx.font = `700 16px ${F}`;
-    ctx.fillText('¡Gracias por su compra!', W / 2, H - 52);
+ctx.fillText(this.ajustar(ctx, cfg.pie || '¡Gracias por su compra!', W - PAD * 2), W / 2, H - 52);
     ctx.fillStyle = '#9db8c9';
     ctx.font = `500 12px ${F}`;
     ctx.fillText('Documento de control interno · Sin validez fiscal', W / 2, H - 30);

@@ -87,6 +87,7 @@ Modules.dashboard = {
         <button class="btn btn-soft" data-action="mercancia"><i data-lucide="package-plus"></i> Agregar mercancía</button>
         <button class="btn btn-soft" data-action="cierre"><i data-lucide="calendar-check"></i> Cerrar el día</button>
         <button class="btn btn-soft" data-action="reportes"><i data-lucide="bar-chart-3"></i> Reportes</button>
+        <button class="btn btn-soft" data-action="ajustes"><i data-lucide="settings"></i> Mi negocio</button>
       </div>
 
       <div class="grid grid-4">
@@ -186,6 +187,7 @@ Modules.dashboard = {
       if (a === 'mercancia') Modules.inventario.form('nuevo');
       if (a === 'cierre') Cierre.abrir();
       if (a === 'reportes') App.go('reportes');
+      if (a === 'ajustes') Ajustes.abrir();
       if (a === 'respaldar') this.respaldo(false);
       if (a === 'compartir') this.respaldo(true);
     };

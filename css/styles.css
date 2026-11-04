@@ -515,3 +515,48 @@ a.btn { text-decoration: none; }
 @media (min-width: 900px) {
   #pwa-bar { left: auto; right: 20px; bottom: 20px; max-width: 380px; }
 }
+/* ===== Parte 14: seguridad (PIN y roles) ===== */
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+
+/* Lo que el empleado no puede usar */
+body.rol-empleado [data-action="borrar"],
+body.rol-empleado [data-action="editar"],
+body.rol-empleado [data-action="devolver"],
+body.rol-empleado [data-action="devoluciones"],
+body.rol-empleado [data-action="deshacer"] { display: none !important; }
+
+/* Pantalla de bloqueo */
+#lock {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; overflow-y: auto;
+  background: linear-gradient(160deg, #e0f2fe, #f0f9ff 60%, #ffffff);
+}
+#lock.lock-off { display: none; }
+.lock-box { width: 100%; max-width: 340px; text-align: center; }
+.lock-logo {
+  width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 20px;
+  display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, #0ea5e9, #22d3ee);
+  box-shadow: 0 10px 24px rgba(14, 165, 233, .3);
+}
+.lock-box h2 { margin: 0 0 4px; font-size: 1.3rem; color: #0c2a3f; }
+.lock-dots { height: 34px; display: flex; justify-content: center; align-items: center; gap: 10px; margin: 10px 0 4px; }
+.lock-dots i { display: block; width: 14px; height: 14px; border-radius: 50%; background: #0ea5e9; }
+.lock-dots i.off { background: #cfe7f7; }
+.lock-msg { min-height: 22px; margin: 4px 0; color: #dc2626; font-size: .88rem; font-weight: 600; }
+.lock-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0; }
+.lock-pad button {
+  height: 62px; border: 0; border-radius: 18px; background: #ffffff; color: #0c2a3f;
+  box-shadow: 0 2px 8px rgba(20, 80, 140, .12);
+  font-family: inherit; font-size: 1.5rem; font-weight: 700; cursor: pointer;
+  display: grid; place-items: center;
+}
+.lock-pad button:active { transform: scale(.96); }
+.lock-pad .ok { background: #0ea5e9; color: #fff; }
+.lock-link { border: 0; background: none; color: #0284c7; font-family: inherit; font-weight: 600; padding: 10px; margin-top: 4px; cursor: pointer; }
+.lock-code {
+  margin: 14px 0; padding: 16px; border-radius: 16px;
+  background: #e0f2fe; color: #0369a1;
+  font-size: 2rem; font-weight: 800; letter-spacing: .25em;
+}

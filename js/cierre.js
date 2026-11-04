@@ -1,11 +1,8 @@
 /* =========================================================
    CIERRE - Cierre del día y cuadre de caja
-   Resume el día y compara lo que debería haber con lo que
-   ella cuenta. Dos modos de conteo:
-   - "dia":   solo lo de hoy (entró menos salió ese día)
-   - "total": toda la caja hasta ese día
+   Cuenta solo lo que entró y salió de la caja ese día.
    Colección "cierres":
-   { id, fecha, modo, ventasUsd, gananciaUsd, esperadoBs, esperadoUsd,
+   { id, numero, fecha, ventasUsd, gananciaUsd, esperadoBs, esperadoUsd,
      contadoBs, contadoUsd, difBs, difUsd, ajuste, ajusteIds, nota }
    ========================================================= */
 
@@ -31,24 +28,36 @@ const Cierre = {
     // Se ignoran los ajustes que hizo este mismo cierre
     const todos = Caja.movimientos().filter(m => !propios.has(m.id));
     const delDia = todos.filter(m => m.fecha === fecha);
-    const entro = Caja.saldo(delDia.filter(m => m.tipo === 'ingreso'));
-    const salio = Caja.saldo(delDia.filter(m => m.tipo === 'gasto').map(m => ({ ...m, tipo: 'ingreso' })));
-    const cobros = Caja.saldo(delDia.filter(m => m.categoria === 'Cobros de fiados'));
+
+    const ent = f => Caja.saldo(delDia.filter(f));
+    // Para las salidas se invierte el signo y salen como números positivos
+    const sal = f => Caja.saldo(delDia.filter(f).map(m => ({ ...m, tipo: 'ingreso' })));
 
     const gastosUsd = suma(
       delDia.filter(m => m.tipo === 'gasto' && !m.auto && m.categoria !== 'Ajuste de caja'),
       m => (m.moneda === 'BS' ? Tasa.toUsd(m.monto) : m.monto)
     );
     const perdidasUsd = suma(Store.all('mermas').filter(m => m.fecha === fecha), m => m.costo);
+    const devolucionesUsd = suma(Store.all('devoluciones').filter(d => d.fecha === fecha), d => d.montoUsd);
 
     return {
-      previo, ventas, totalUsd,
+      previo, ventas, totalUsd, devolucionesUsd,
       fiadoUsd: suma(ventas.filter(v => v.fiado), v => v.total),
       mayorUsd: suma(ventas.filter(v => v.tipo === 'negocio'), v => v.total),
-      entro, salio, cobros, gastosUsd, perdidasUsd,
+
+      entro: ent(m => m.tipo === 'ingreso'),
+      ventasCaja: ent(m => m.tipo === 'ingreso' && m.categoria === 'Ventas'),
+      cobros: ent(m => m.categoria === 'Cobros de fiados'),
+      otrosIng: ent(m => m.tipo === 'ingreso' && m.categoria !== 'Ventas' && m.categoria !== 'Cobros de fiados'),
+
+      salio: sal(m => m.tipo === 'gasto'),
+      gastosCaja: sal(m => m.tipo === 'gasto' && !m.auto && m.categoria !== 'Ajuste de caja'),
+      compras: sal(m => m.tipo === 'gasto' && m.categoria === 'Mercancía'),
+      devol: sal(m => m.tipo === 'gasto' && m.categoria === 'Ajuste de caja'),
+
+      gastosUsd, perdidasUsd,
       ganancia: gananciaVentas - gastosUsd - perdidasUsd,
-      esperadoDia: Caja.saldo(delDia),
-      esperadoTotal: Caja.saldo(todos.filter(m => (m.fecha || '') <= fecha))
+      esperado: Caja.saldo(delDia)
     };
   },
 
@@ -56,7 +65,6 @@ const Cierre = {
     fecha = fecha || Utils.today();
     const r = this.resumen(fecha);
     const p = r.previo;
-    const modoInicial = (p && p.modo) || 'dia';
     const val = v => (v === null || v === undefined ? '' : v);
     const cierres = Store.all('cierres').slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 7);
 
@@ -89,17 +97,12 @@ const Cierre = {
         </div>
 
         <div class="card-title" style="margin:8px 0 0">Cuadre de caja</div>
+        <span class="hint">Cuenta solo el dinero que entró y salió hoy, sin lo que ya tenías guardado.</span>
 
-        <div class="field">
-          <label>¿Qué vas a contar?</label>
-          <select name="modo">
-            <option value="dia" ${modoInicial === 'dia' ? 'selected' : ''}>Solo lo de hoy (entró menos salió)</option>
-            <option value="total" ${modoInicial === 'total' ? 'selected' : ''}>Toda la caja (incluye lo guardado)</option>
-          </select>
-          <span class="hint" id="cierre-hint"></span>
+        <div class="preview">
+          <div><span>Debería haber en Bs</span><b>${Utils.bs(r.esperado.BS)}</b></div>
+          <div><span>Debería haber en $</span><b>${Utils.usd(r.esperado.USD)}</b></div>
         </div>
-
-        <div class="preview" id="cierre-esp"></div>
 
         <div class="form-row">
           <div class="field">
@@ -124,7 +127,7 @@ const Cierre = {
         </div>
 
         <button type="submit" class="btn btn-primary btn-block"><i data-lucide="calendar-check"></i> Guardar cierre</button>
-        ${p ? '<button type="button" class="btn btn-soft btn-block" data-comp="1"><i data-lucide="file-text"></i> Ver comprobante</button>' : ''}
+        ${p ? '<button type="button" class="btn btn-soft btn-block" data-comp="1"><i data-lucide="file-text"></i> Ver ticket del cierre</button>' : ''}
       </form>
 
       ${cierres.length ? `
@@ -144,12 +147,8 @@ const Cierre = {
 
     UI.openModal('Cierre del día', html, body => {
       const f = body.querySelector('#cierre-form');
-      const espBox = body.querySelector('#cierre-esp');
       const difBox = body.querySelector('#cierre-dif');
-      const hint = body.querySelector('#cierre-hint');
       const redondea = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
-
-      const esperadoActual = () => (f.modo.value === 'total' ? r.esperadoTotal : r.esperadoDia);
 
       const leer = (campo, esperado) => {
         const t = campo.value.trim();
@@ -163,22 +162,11 @@ const Cierre = {
       };
 
       const actualizar = () => {
-        const esp = esperadoActual();
-        const dia = f.modo.value === 'dia';
-        hint.textContent = dia
-          ? 'Cuenta solo el dinero de las ventas y cobros de hoy, sin lo que ya tenías guardado.'
-          : 'Cuenta todo el dinero que hay en la caja.';
-        espBox.innerHTML = `
-          <div><span>${dia ? 'Debería haber de lo de hoy en Bs' : 'Debería haber en Bs'}</span><b>${Utils.bs(esp.BS)}</b></div>
-          <div><span>${dia ? 'Debería haber de lo de hoy en $' : 'Debería haber en $'}</span><b>${Utils.usd(esp.USD)}</b></div>
-          ${dia && (esp.BS < -0.005 || esp.USD < -0.005)
-            ? '<div><span class="muted">Hoy salió más dinero del que entró. Si quieres contar todo, elige "Toda la caja".</span></div>' : ''}`;
         difBox.innerHTML = `
-          <div><span>Diferencia en Bs</span>${texto(leer(f.contadoBs, esp.BS), 'BS')}</div>
-          <div><span>Diferencia en $</span>${texto(leer(f.contadoUsd, esp.USD), 'USD')}</div>`;
+          <div><span>Diferencia en Bs</span>${texto(leer(f.contadoBs, r.esperado.BS), 'BS')}</div>
+          <div><span>Diferencia en $</span>${texto(leer(f.contadoUsd, r.esperado.USD), 'USD')}</div>`;
       };
       f.addEventListener('input', actualizar);
-      f.addEventListener('change', actualizar);
       actualizar();
 
       // Cambiar el día abre el cierre de ese día
@@ -195,18 +183,13 @@ const Cierre = {
       f.addEventListener('submit', e => {
         e.preventDefault();
         const dia = f.fecha.value || Utils.today();
-        const modo = f.modo.value;
 
         // Si se está corrigiendo un cierre, primero se quitan sus ajustes anteriores
         if (p && p.ajusteIds && p.ajusteIds.length) {
           Store.set('movimientos', Store.all('movimientos').filter(m => !p.ajusteIds.includes(m.id)));
         }
 
-        const todos = Caja.movimientos();
-        const esperado = modo === 'total'
-          ? Caja.saldo(todos.filter(m => (m.fecha || '') <= dia))
-          : Caja.saldo(todos.filter(m => m.fecha === dia));
-
+        const esperado = Caja.saldo(Caja.movimientos().filter(m => m.fecha === dia));
         const difBs = leer(f.contadoBs, esperado.BS);
         const difUsd = leer(f.contadoUsd, esperado.USD);
         const ajusteIds = [];
@@ -226,7 +209,7 @@ const Cierre = {
         }
 
         const datos = {
-          fecha: dia, modo,
+          fecha: dia,
           ventasUsd: r.totalUsd,
           gananciaUsd: r.ganancia,
           esperadoBs: esperado.BS, esperadoUsd: esperado.USD,
@@ -237,8 +220,13 @@ const Cierre = {
           nota: f.nota.value.trim()
         };
 
-        if (p) Store.update('cierres', p.id, datos);
-        else Store.add('cierres', datos);
+        if (p) {
+          Store.update('cierres', p.id, datos);
+        } else {
+          const numero = Store.get('cierreSeq', 0) + 1;
+          Store.set('cierreSeq', numero);
+          Store.add('cierres', { ...datos, numero });
+        }
 
         UI.closeModal();
         UI.toast('Cierre guardado');

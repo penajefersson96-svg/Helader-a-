@@ -53,6 +53,7 @@ const App = {
   
   go(view) {
     if (!this.views[view]) return;
+    if (!Seguridad.puede(view)) view = Seguridad.inicio();
     this.current = view;
     Store.PREFIX && localStorage.setItem(Store.PREFIX + 'vista', JSON.stringify(view));
     history.replaceState(null, '', '#' + view);

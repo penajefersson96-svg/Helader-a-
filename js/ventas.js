@@ -170,7 +170,7 @@ const Ventas = {
           <div><span>Total en dólares</span><b>${Utils.usd(totalUsd)}</b></div>
           <div><span>Total en bolívares</span><b>${Utils.bs(Tasa.toBs(totalUsd))}</b></div>
           ${contado ? `<div><span>Te pagan en ${pm === 'BS' ? 'bolívares' : 'dólares'}</span><b>${pm === 'BS' ? Utils.bs(monto) : Utils.usd(monto)}</b></div>` : ''}
-          <div><span>Ganancia de esta venta</span><b>${Utils.usd(gan)}</b></div>`;
+${Seguridad.dueno() ? `<div><span>Ganancia de esta venta</span><b>${Utils.usd(gan)}</b></div>` : ''}`;
       };
 
       const pintarCarrito = () => {
@@ -387,7 +387,9 @@ Modules.ventas = {
   },
 
   render(container) {
-    const todas = Store.all('ventas').slice().reverse();
+    const esDueno = Seguridad.dueno();
+    const todas = Store.all('ventas').slice().reverse()
+      .filter(v => esDueno || v.fecha === Utils.today());
     const hoy = Utils.today();
     const deHoy = todas.filter(v => v.fecha === hoy);
     const totalHoy = deHoy.reduce((a, v) => a + v.total, 0);
@@ -404,8 +406,13 @@ Modules.ventas = {
 
     container.innerHTML = `
       <div class="grid grid-3">
+                $ { esDueno ? `
         <div class="card stat">
-          <div class="stat-icon"><i data-lucide="shopping-bag"></i></div>
+          <div class="stat-icon"><i data-lucide="trending-up"></i></div>
+          <span class="stat-label">Ganancia de hoy</span>
+          <span class="stat-value ${gananciaHoy >= 0 ? 'positive' : 'negative'}">${Utils.usd(gananciaHoy)}</span>
+          <span class="stat-sub">${Utils.bs(Tasa.toBs(gananciaHoy))}</span>
+        </div>` : '' }
           <span class="stat-label">Vendido hoy</span>
           <span class="stat-value">${Utils.usd(totalHoy)}</span>
           <span class="stat-sub">${Utils.bs(Tasa.toBs(totalHoy))}</span>
@@ -526,7 +533,7 @@ Modules.ventas = {
             ${devuelta
               ? '<span class="badge badge-warning">Devuelta</span>'
               : (devueltoQ > 0 ? `<span class="badge badge-warning">Devolvió ${Inventario.q(devueltoQ)}</span>` : '')}
-            <span class="muted" style="font-size:.8rem">Ganancia ${Utils.usd(gan)}</span>
+${Seguridad.dueno() ? `<span class="muted" style="font-size:.8rem">Ganancia ${Utils.usd(gan)}</span>` : ''}
           </div>
           <div class="item-actions">
             ${botonFactura}
