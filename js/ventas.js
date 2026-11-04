@@ -170,7 +170,7 @@ const Ventas = {
           <div><span>Total en dólares</span><b>${Utils.usd(totalUsd)}</b></div>
           <div><span>Total en bolívares</span><b>${Utils.bs(Tasa.toBs(totalUsd))}</b></div>
           ${contado ? `<div><span>Te pagan en ${pm === 'BS' ? 'bolívares' : 'dólares'}</span><b>${pm === 'BS' ? Utils.bs(monto) : Utils.usd(monto)}</b></div>` : ''}
-${Seguridad.dueno() ? `<div><span>Ganancia de esta venta</span><b>${Utils.usd(gan)}</b></div>` : ''}`;
+          ${Seguridad.dueno() ? `<div><span>Ganancia de esta venta</span><b>${Utils.usd(gan)}</b></div>` : ''}`;
       };
 
       const pintarCarrito = () => {
@@ -406,23 +406,19 @@ Modules.ventas = {
 
     container.innerHTML = `
       <div class="grid grid-3">
-                $ { esDueno ? `
         <div class="card stat">
-          <div class="stat-icon"><i data-lucide="trending-up"></i></div>
-          <span class="stat-label">Ganancia de hoy</span>
-          <span class="stat-value ${gananciaHoy >= 0 ? 'positive' : 'negative'}">${Utils.usd(gananciaHoy)}</span>
-          <span class="stat-sub">${Utils.bs(Tasa.toBs(gananciaHoy))}</span>
-        </div>` : '' }
+          <div class="stat-icon"><i data-lucide="shopping-bag"></i></div>
           <span class="stat-label">Vendido hoy</span>
           <span class="stat-value">${Utils.usd(totalHoy)}</span>
           <span class="stat-sub">${Utils.bs(Tasa.toBs(totalHoy))}</span>
         </div>
+        ${esDueno ? `
         <div class="card stat">
           <div class="stat-icon"><i data-lucide="trending-up"></i></div>
           <span class="stat-label">Ganancia de hoy</span>
           <span class="stat-value ${gananciaHoy >= 0 ? 'positive' : 'negative'}">${Utils.usd(gananciaHoy)}</span>
           <span class="stat-sub">${Utils.bs(Tasa.toBs(gananciaHoy))}</span>
-        </div>
+        </div>` : ''}
         <div class="card stat">
           <div class="stat-icon"><i data-lucide="receipt"></i></div>
           <span class="stat-label">Ventas hoy</span>
@@ -455,7 +451,7 @@ Modules.ventas = {
       if (!btn) return;
       const a = btn.dataset.action;
       if (a === 'nueva') Ventas.openSale();
-            if (a === 'editar') EditarVenta.abrir(btn.dataset.ids.split(','));
+      if (a === 'editar') EditarVenta.abrir(btn.dataset.ids.split(','));
       if (a === 'devolver') Devoluciones.nueva(btn.dataset.ids.split(','));
       if (a === 'devoluciones') Devoluciones.lista();
       if (a === 'factura') {
@@ -479,7 +475,7 @@ Modules.ventas = {
     };
   },
 
-    card(g) {
+  card(g) {
     const L = g.lineas;
     const v = L[0];
     const total = L.reduce((a, x) => a + x.total, 0);
@@ -491,21 +487,21 @@ Modules.ventas = {
     // Fiado sin pagar: tasa de hoy. Lo demás, la tasa del día de la venta.
     const tasa = debe ? Tasa.valor() : (v.tasa || Tasa.valor());
     const pagoTxt = v.pagoMoneda ? ' · ' + (v.pagoMoneda === 'BS' ? 'Bs' : '$') : '';
-    
+
     const vivas = L.filter(x => x.cantidad > 0);
     const mostrar = vivas.length ? vivas : L;
-    const titulo = mostrar.length === 1 ?
-      `${Utils.esc(mostrar[0].nombre)} × ${Inventario.q(mostrar[0].cantidad)}` :
-      `${mostrar.length} productos`;
-    const detalle = mostrar.length > 1 ?
-      `<div class="muted" style="font-size:.85rem;margin-top:6px">${mostrar.map(x => `${Utils.esc(x.nombre)} × ${Inventario.q(x.cantidad)}`).join(' · ')}</div>` :
-      '';
-    
+    const titulo = mostrar.length === 1
+      ? `${Utils.esc(mostrar[0].nombre)} × ${Inventario.q(mostrar[0].cantidad)}`
+      : `${mostrar.length} productos`;
+    const detalle = mostrar.length > 1
+      ? `<div class="muted" style="font-size:.85rem;margin-top:6px">${mostrar.map(x => `${Utils.esc(x.nombre)} × ${Inventario.q(x.cantidad)}`).join(' · ')}</div>`
+      : '';
+
     const ids = L.map(x => x.id).join(',');
-    const botonFactura = g.ticket ?
-      `<button class="icon-btn" data-action="factura" data-ticket="${g.ticket}" aria-label="Factura"><i data-lucide="file-text"></i></button>` :
-      (v.cliente ? `<button class="icon-btn" data-action="factura" data-id="${v.id}" aria-label="Factura"><i data-lucide="file-text"></i></button>` : '');
-    
+    const botonFactura = g.ticket
+      ? `<button class="icon-btn" data-action="factura" data-ticket="${g.ticket}" aria-label="Factura"><i data-lucide="file-text"></i></button>`
+      : (v.cliente ? `<button class="icon-btn" data-action="factura" data-id="${v.id}" aria-label="Factura"><i data-lucide="file-text"></i></button>` : '');
+
     return `
       <div class="card item">
         <div class="item-head">
@@ -533,7 +529,7 @@ Modules.ventas = {
             ${devuelta
               ? '<span class="badge badge-warning">Devuelta</span>'
               : (devueltoQ > 0 ? `<span class="badge badge-warning">Devolvió ${Inventario.q(devueltoQ)}</span>` : '')}
-${Seguridad.dueno() ? `<span class="muted" style="font-size:.8rem">Ganancia ${Utils.usd(gan)}</span>` : ''}
+            ${Seguridad.dueno() ? `<span class="muted" style="font-size:.8rem">Ganancia ${Utils.usd(gan)}</span>` : ''}
           </div>
           <div class="item-actions">
             ${botonFactura}
@@ -544,4 +540,4 @@ ${Seguridad.dueno() ? `<span class="muted" style="font-size:.8rem">Ganancia ${Ut
         </div>
       </div>`;
   }
-  };
+};

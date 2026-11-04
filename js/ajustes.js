@@ -60,3 +60,15 @@ const Ajustes = {
     });
   }
 };
+// Pone el nombre del negocio en el menú y en el título de la página
+Ajustes.aplicarNombre = function() {
+  const n = (Store.get('config', {}).negocio || '').trim();
+  if (!n) return;
+  const t = document.querySelector('.brand-text strong');
+  if (t) t.textContent = n;
+  document.title = n;
+};
+document.addEventListener('DOMContentLoaded', () => Ajustes.aplicarNombre());
+window.addEventListener('store:change', e => {
+  if (e.detail && e.detail.key === 'config') Ajustes.aplicarNombre();
+});
