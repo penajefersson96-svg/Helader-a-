@@ -169,7 +169,7 @@ Modules.dashboard = {
           <button class="btn btn-soft" data-action="compartir"><i data-lucide="share-2"></i> Compartir</button>
           <label class="btn btn-soft" style="cursor:pointer">
             <i data-lucide="upload"></i> Restaurar
-            <input type="file" id="imp-file" accept=".json,application/json" hidden>
+<input type="file" id="imp-file" accept=".json,.txt,application/json,text/plain" hidden>
           </label>
         </div>
       </div>
@@ -209,26 +209,42 @@ Modules.dashboard = {
   },
 
   /* ---------- Respaldo ---------- */
-  respaldo(compartir) {
-    const nombre = `respaldo-heladeria-${Utils.today()}.json`;
-    const file = new File([Store.exportAll()], nombre, { type: 'application/json' });
+    respaldo(compartir) {
+    const json = Store.exportAll();
+    const base = `respaldo-heladeria-${Utils.today()}`;
     const marcar = () => Store.set('ultimoRespaldo', Utils.today());
-
-    if (compartir && navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: 'Respaldo Mi Heladería' }).then(marcar).catch(() => {});
-      return;
+    
+    const descargar = () => {
+      const file = new File([json], base + '.json', { type: 'application/json' });
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      marcar();
+      UI.toast('Respaldo descargado');
+    };
+    
+    if (!compartir) return descargar();
+    
+    // Para compartir se usa .txt: los navegadores lo permiten, pero suelen bloquear .json
+    const file = new File([json], base + '.txt', { type: 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'Respaldo Mi Heladería' })
+        .then(marcar)
+        .catch(err => {
+          if (err && err.name !== 'AbortError') {
+            UI.toast('No se pudo compartir. Se descargará.', 'error');
+            descargar();
+          }
+        });
+    } else {
+      UI.toast('Tu navegador no permite compartir. Se descargará.', 'error');
+      descargar();
     }
-
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = nombre;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    marcar();
-    UI.toast('Respaldo descargado');
   },
 
   restaurar(file) {

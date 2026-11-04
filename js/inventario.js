@@ -306,7 +306,7 @@ Modules.inventario = {
           </div>
           <div class="item-actions">
             ${!s.terminado ? `<button class="btn btn-primary btn-sm" data-action="vender" data-id="${p.id}"><i data-lucide="shopping-cart"></i> Vender</button>` : ''}
-            <button class="btn btn-soft btn-sm" data-action="recomprar" data-id="${p.id}"><i data-lucide="repeat"></i> Recomprar</button>
+            <button class="btn btn-soft btn-sm" data-action="recomprar" data-id="${p.id}"><i data-lucide="repeat"></i> Reponer</button>
             ${!s.terminado ? `<button class="icon-btn" data-action="merma" data-id="${p.id}" aria-label="Registrar pérdida"><i data-lucide="package-x"></i></button>` : ''}
             <button class="icon-btn" data-action="editar" data-id="${p.id}" aria-label="Editar"><i data-lucide="pencil"></i></button>
             <button class="icon-btn" data-action="borrar" data-id="${p.id}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
@@ -317,7 +317,7 @@ Modules.inventario = {
 
   /* ---------- Formulario: nuevo / editar / recomprar ---------- */
   form(modo, p = {}) {
-    const titulos = { nuevo: 'Agregar mercancía', editar: 'Editar mercancía', recomprar: 'Recomprar mercancía' };
+    const titulos = { nuevo: 'Agregar mercancía', editar: 'Editar mercancía', recomprar: 'Reponer mercancía' };
     const limpio = n => (n === undefined || n === null || n === '') ? '' : Utils.esc(+Number(n).toFixed(4));
     const txt = k => (p[k] !== undefined && p[k] !== null ? Utils.esc(p[k]) : '');
 
@@ -473,7 +473,7 @@ Modules.inventario = {
           UI.toast('Mercancía actualizada');
         } else {
           Store.add('productos', datos);
-          UI.toast(modo === 'recomprar' ? 'Recompra registrada' : 'Mercancía agregada');
+          UI.toast(modo === 'recomprar' ? 'Reposición registrada' : 'Mercancía agregada');
         }
         UI.closeModal();
       });
