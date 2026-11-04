@@ -9,7 +9,7 @@
    LOCAL y cambia VERSION.
    ========================================================= */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'heladeria-' + VERSION;
 
 const LOCAL = [
@@ -18,7 +18,7 @@ const LOCAL = [
   'js/utils.js', 'js/storage.js', 'js/picker.js', 'js/tasa.js',
   'js/inventario.js', 'js/ventas.js', 'js/fiados.js', 'js/caja.js',
   'js/dashboard.js', 'js/catalogo.js', 'js/clientes.js', 'js/factura.js',
-  'js/mermas.js', 'js/cierre.js', 'js/reportes.js', 'js/app.js', 'js/pwa.js',
+  'js/mermas.js', 'js/cierre.js', 'js/comprobante.js', 'js/reportes.js', 'js/app.js', 'js/pwa.js',
   'icons/icon-192.png', 'icons/icon-512.png'
 ];
 

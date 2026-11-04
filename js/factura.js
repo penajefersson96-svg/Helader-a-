@@ -25,8 +25,45 @@ const Factura = {
     if (!v || !v.cliente) return UI.toast('Esta venta no tiene cliente', 'error');
     this.nueva(v.cliente, ventaId);
   },
+    // Factura/ticket de una venta con varios productos (con o sin nombre de cliente)
+  deTicket(ticket) {
+    const lineas = Store.all('ventas').filter(v => v.ticket === ticket);
+    if (!lineas.length) return UI.toast('No se encontró la venta', 'error');
+
+    // Si ya tiene factura, se abre la misma
+    const ids = new Set(lineas.map(v => v.id));
+    const previa = Store.all('facturas').find(f => f.lineas.some(l => ids.has(l.ventaId)));
+    if (previa) return this.ver(previa.id);
+
+    const v0 = lineas[0];
+    const cli = (v0.cliente && Clientes.buscar(v0.cliente)) || {};
+    const fiadas = lineas.filter(v => v.fiado && !v.pagado);
+    const numero = Store.get('facturaSeq', 0) + 1;
+    Store.set('facturaSeq', numero);
+
+    const rec = Store.add('facturas', {
+      numero,
+      cliente: v0.cliente || 'Cliente general',
+      telefono: cli.telefono || '',
+      direccion: cli.direccion || '',
+      rif: cli.rif || '',
+      fecha: v0.fecha || Utils.today(),
+      tasa: Tasa.valor(),
+      lineas: lineas.map(v => ({
+        ventaId: v.id, nombre: v.nombre, cantidad: v.cantidad,
+        precioUnit: v.precioUnit, total: v.total
+      })),
+      totalUsd: lineas.reduce((a, v) => a + v.total, 0),
+      condicion: fiadas.length ? 'Crédito' : 'Contado',
+      vence: fiadas.length ? fiadas.map(v => v.fechaPago).sort()[0] : null,
+      nota: ''
+    });
+    UI.toast('Factura creada');
+    this.ver(rec.id);
+  },
 
   /* ---------- Crear ---------- */
+  
   nueva(nombre, ventaId) {
     const pend = this.sinFacturar(nombre);
     if (!pend.length) return UI.toast('Este cliente no tiene ventas sin facturar', 'error');

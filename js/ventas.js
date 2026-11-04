@@ -1,8 +1,9 @@
 /* =========================================================
-   VENTAS - Registrar ventas (al detal o a negocios)
-   Cada venta guarda:
-   { productoId, nombre, cantidad, precioUnit (USD), total (USD), costoUnit,
-     moneda, precioOrig, tipo: 'detal'|'negocio', cliente,
+   VENTAS - Registrar ventas (carrito con varios productos)
+   Cada producto del carrito se guarda como una venta, y todas
+   comparten el mismo "ticket":
+   { ticket, productoId, nombre, cantidad, precioUnit (USD), total (USD),
+     costoUnit, moneda, precioOrig, tipo: 'detal'|'negocio', cliente,
      fiado, fechaPago, pagado, pagoMoneda, pagoMonto, fecha, tasa }
    ========================================================= */
 
@@ -13,6 +14,10 @@ const Ventas = {
     return Clientes.lista().map(c => c.nombre);
   },
 
+  nuevoTicket() {
+    return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  },
+
   openSale(productoId) {
     const ventas = Store.all('ventas');
     const disponibles = Store.all('productos')
@@ -20,11 +25,19 @@ const Ventas = {
       .filter(d => d.s.restante > 0);
 
     if (!disponibles.length) {
-      return UI.toast('No hay mercancía disponible. Agrega o recompra primero.', 'error');
+      return UI.toast('No hay mercancía disponible. Agrega o repón primero.', 'error');
     }
 
     const html = `
       <form class="form" id="venta-form" autocomplete="off">
+        <div class="field">
+          <label>Tipo de venta</label>
+          <select name="tipo">
+            <option value="detal">Al detal</option>
+            <option value="negocio">A un negocio (mayor)</option>
+          </select>
+        </div>
+
         <div class="field has-picker">
           <label>Producto</label>
           <input type="text" id="buscar-prod" placeholder="Escribe una letra o el nombre" autocomplete="off">
@@ -38,25 +51,23 @@ const Ventas = {
             <input name="cantidad" type="text" inputmode="decimal" placeholder="1" value="1">
           </div>
           <div class="field">
-            <label>Tipo de venta</label>
-            <select name="tipo">
-              <option value="detal">Al detal</option>
-              <option value="negocio">A un negocio (mayor)</option>
-            </select>
+            <label>Precio c/u</label>
+            <div class="input-group">
+              <input name="precio" type="text" inputmode="decimal" placeholder="0,00">
+              <select name="moneda">
+                <option value="USD">$</option>
+                <option value="BS">Bs</option>
+              </select>
+            </div>
           </div>
         </div>
+        <span class="hint">Si haces una rebaja, solo cambia el precio aquí.</span>
 
-        <div class="field">
-          <label>Precio c/u</label>
-          <div class="input-group">
-            <input name="precio" type="text" inputmode="decimal" placeholder="0,00">
-            <select name="moneda">
-              <option value="USD">$</option>
-              <option value="BS">Bs</option>
-            </select>
-          </div>
-          <span class="hint">Si haces una rebaja, solo cambia el precio aquí.</span>
-        </div>
+        <button type="button" class="btn btn-soft btn-block" id="add-linea">
+          <i data-lucide="plus"></i> Agregar otro producto
+        </button>
+
+        <div id="carrito"></div>
 
         <div class="field">
           <label>Forma de pago</label>
@@ -104,72 +115,134 @@ const Ventas = {
       const prev = body.querySelector('#venta-preview');
       const buscar = body.querySelector('#buscar-prod');
       const picker = body.querySelector('#picker');
+      const carrito = body.querySelector('#carrito');
       const fechaBox = body.querySelector('#fecha-pago-box');
       const pagoBox = body.querySelector('#pago-moneda-box');
       const cliLabel = body.querySelector('#cliente-label');
 
       const redondea = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
-      const productoActual = () => disponibles.find(d => d.p.id === f.producto.value);
-      let monedaActual = 'USD';
+      const lineas = [];            // productos ya agregados al carrito
+      let monedaActual = 'USD';     // moneda del precio que se está escribiendo
       let pagoTocado = false;
       let pk = null;
 
-      const precioUsd = () => {
-        const v = Utils.num(f.precio.value);
-        return monedaActual === 'BS' ? Tasa.toUsd(v) : v;
+      const productoActual = () => disponibles.find(d => d.p.id === f.producto.value);
+      const enCarrito = id => lineas.filter(l => l.p.id === id).reduce((a, l) => a + l.cantidad, 0);
+      const usdDe = l => (l.moneda === 'BS' ? Tasa.toUsd(l.precioOrig) : l.precioOrig);
+      const sugeridoUsd = p => (f.tipo.value === 'negocio' ? Inventario.precioMayor(p) : Inventario.precioDetal(p));
+      const sugeridoEn = (p, moneda) => {
+        const usd = sugeridoUsd(p);
+        return moneda === 'BS' ? redondea(Tasa.toBs(usd), 2) : redondea(usd, 4);
       };
 
-      // Lo que realmente se cobra, en la moneda en que te pagan
-      const montoPago = () => {
-        const total = Utils.num(f.cantidad.value) * Utils.num(f.precio.value);
-        const pm = f.pagoMoneda.value;
-        if (pm === monedaActual) return total;
-        return pm === 'BS' ? total * Tasa.valor() : Tasa.toUsd(total);
+      // Lo que se cobra de una línea, en la moneda en que te pagan
+      const pagoLinea = (l, pm) => {
+        const tot = l.cantidad * l.precioOrig;
+        if (pm === l.moneda) return tot;
+        return pm === 'BS' ? tot * Tasa.valor() : Tasa.toUsd(tot);
+      };
+
+      // Carrito + lo que esté escrito arriba (para que el total se vea al instante)
+      const vista = () => {
+        const out = lineas.slice();
+        const d = productoActual();
+        const cantidad = Utils.num(f.cantidad.value);
+        const precioOrig = Utils.num(f.precio.value);
+        if (d && cantidad > 0 && precioOrig > 0) {
+          out.push({ p: d.p, cantidad, precioOrig, moneda: monedaActual });
+        }
+        return out;
       };
 
       const actualizar = () => {
-        const d = productoActual();
-        if (!d) {
+        const v = vista();
+        if (!v.length) {
           prev.innerHTML = '<div><span>Elige un producto para ver el total</span></div>';
           return;
         }
-        const cant = Utils.num(f.cantidad.value);
-        const totalUsd = cant * precioUsd();
-        const gan = totalUsd - cant * d.p.costo;
-        const contado = f.pago.value === 'contado';
         const pm = f.pagoMoneda.value;
+        const totalUsd = v.reduce((a, l) => a + l.cantidad * usdDe(l), 0);
+        const gan = totalUsd - v.reduce((a, l) => a + l.cantidad * l.p.costo, 0);
+        const contado = f.pago.value === 'contado';
+        const monto = v.reduce((a, l) => a + pagoLinea(l, pm), 0);
         prev.innerHTML = `
+          <div><span>Productos</span><b>${v.length}</b></div>
           <div><span>Total en dólares</span><b>${Utils.usd(totalUsd)}</b></div>
           <div><span>Total en bolívares</span><b>${Utils.bs(Tasa.toBs(totalUsd))}</b></div>
-          ${contado ? `<div><span>Te pagan en ${pm === 'BS' ? 'bolívares' : 'dólares'}</span><b>${pm === 'BS' ? Utils.bs(montoPago()) : Utils.usd(montoPago())}</b></div>` : ''}
+          ${contado ? `<div><span>Te pagan en ${pm === 'BS' ? 'bolívares' : 'dólares'}</span><b>${pm === 'BS' ? Utils.bs(monto) : Utils.usd(monto)}</b></div>` : ''}
           <div><span>Ganancia de esta venta</span><b>${Utils.usd(gan)}</b></div>`;
+      };
+
+      const pintarCarrito = () => {
+        if (!lineas.length) { carrito.innerHTML = ''; return; }
+        carrito.innerHTML = `
+          <div class="card-title" style="margin:4px 0">En esta venta</div>
+          ${lineas.map((l, i) => `
+            <div class="mov">
+              <div class="mov-info">
+                <b>${Utils.esc(l.p.nombre)} × ${Inventario.q(l.cantidad)}</b>
+                <span>${l.moneda === 'BS' ? Utils.bs(l.precioOrig) : Utils.usd(l.precioOrig)} c/u</span>
+              </div>
+              <div class="mov-amount">${Utils.usd(l.cantidad * usdDe(l))}</div>
+              <button type="button" class="icon-btn" data-quitar="${i}" aria-label="Quitar"><i data-lucide="x"></i></button>
+            </div>`).join('')}`;
+        UI.icons();
+      };
+
+      carrito.onclick = e => {
+        const b = e.target.closest('[data-quitar]');
+        if (!b) return;
+        lineas.splice(Number(b.dataset.quitar), 1);
+        pintarCarrito();
+        actualizar();
       };
 
       // Pone el precio del producto (detal o mayor) en la moneda elegida
       const precioSugerido = () => {
         const d = productoActual();
-        if (!d) return;
-        const usd = f.tipo.value === 'negocio' ? Inventario.precioMayor(d.p) : Inventario.precioDetal(d.p);
-        f.precio.value = monedaActual === 'BS' ? redondea(Tasa.toBs(usd), 2) : redondea(usd, 4);
-      };
-
-      const sugerirPagoMoneda = () => {
-        if (!pagoTocado) f.pagoMoneda.value = monedaActual;
+        if (d) f.precio.value = sugeridoEn(d.p, monedaActual);
       };
 
       const seleccionar = id => {
         f.producto.value = id;
         const d = productoActual();
         if (pk) pk.fijar(d.p.nombre);
-
         const quiereBs = d.p.precioMoneda === 'BS' && Tasa.valor() > 0;
         monedaActual = quiereBs ? 'BS' : 'USD';
         f.moneda.value = monedaActual;
-        sugerirPagoMoneda();
+        if (!pagoTocado && !lineas.length) f.pagoMoneda.value = monedaActual;
         precioSugerido();
         actualizar();
         f.cantidad.focus();
         f.cantidad.select();
+      };
+
+      // Pasa lo escrito arriba al carrito. Devuelve false si algo falta.
+      const agregar = () => {
+        const d = productoActual();
+        if (!d) { UI.toast('Elige un producto de la lista', 'error'); return false; }
+        const cantidad = Utils.num(f.cantidad.value);
+        const precioOrig = Utils.num(f.precio.value);
+        if (cantidad <= 0) { UI.toast('Escribe la cantidad', 'error'); return false; }
+        if (precioOrig <= 0) { UI.toast('Escribe el precio', 'error'); return false; }
+        const libre = d.s.restante - enCarrito(d.p.id);
+        if (cantidad > libre) { UI.toast(`Solo quedan ${Inventario.q(libre)}`, 'error'); return false; }
+
+        const igual = lineas.find(l => l.p.id === d.p.id && l.moneda === monedaActual && l.precioOrig === precioOrig);
+        if (igual) igual.cantidad += cantidad;
+        else lineas.push({
+          p: d.p, cantidad, precioOrig, moneda: monedaActual,
+          auto: Math.abs(precioOrig - sugeridoEn(d.p, monedaActual)) < 0.005   // sin rebaja manual
+        });
+
+        if (!pagoTocado) f.pagoMoneda.value = lineas[0].moneda;
+        f.producto.value = '';
+        buscar.value = '';
+        f.cantidad.value = '1';
+        f.precio.value = '';
+        pintarCarrito();
+        actualizar();
+        return true;
       };
 
       // Buscador desplegable: muestra pocos productos y filtra al escribir
@@ -188,7 +261,17 @@ const Ventas = {
         onClear: () => { f.producto.value = ''; actualizar(); }
       });
 
-      f.tipo.addEventListener('change', () => { precioSugerido(); actualizar(); });
+      body.querySelector('#add-linea').addEventListener('click', () => {
+        if (agregar()) buscar.focus();
+      });
+
+      // Si cambia el tipo, los precios sin rebaja manual se ajustan al nuevo tipo
+      f.tipo.addEventListener('change', () => {
+        lineas.forEach(l => { if (l.auto) l.precioOrig = sugeridoEn(l.p, l.moneda); });
+        precioSugerido();
+        pintarCarrito();
+        actualizar();
+      });
 
       f.moneda.addEventListener('change', () => {
         const nueva = f.moneda.value;
@@ -202,7 +285,7 @@ const Ventas = {
           f.precio.value = nueva === 'BS' ? redondea(v * t, 2) : redondea(v / t, 4);
         }
         monedaActual = nueva;
-        sugerirPagoMoneda();
+        if (!pagoTocado && !lineas.length) f.pagoMoneda.value = monedaActual;
         actualizar();
       });
 
@@ -229,48 +312,52 @@ const Ventas = {
 
       f.addEventListener('submit', e => {
         e.preventDefault();
-        const d = productoActual();
-        if (!d) return UI.toast('Elige un producto de la lista', 'error');
 
-        const { p, s } = d;
-        const cantidad = Utils.num(f.cantidad.value);
-        const precioOrig = Utils.num(f.precio.value);
-        const precioUnit = precioUsd();
+        // Lo que esté escrito arriba también entra a la venta
+        if (f.producto.value && !agregar()) return;
+        if (!lineas.length) return UI.toast('Agrega al menos un producto', 'error');
+
         const fiado = f.pago.value === 'fiado';
         const cliente = f.cliente.value.trim();
+        const tipo = f.tipo.value;
         const pm = f.pagoMoneda.value;
 
-        if (cantidad <= 0) return UI.toast('Escribe la cantidad', 'error');
-        if (cantidad > s.restante) return UI.toast(`Solo quedan ${Inventario.q(s.restante)}`, 'error');
-        if (precioOrig <= 0 || precioUnit <= 0) return UI.toast('Escribe el precio', 'error');
         if (fiado && !cliente) return UI.toast('Escribe a quién le fías', 'error');
-        if (f.tipo.value === 'negocio' && !cliente) return UI.toast('Escribe el nombre del negocio', 'error');
+        if (tipo === 'negocio' && !cliente) return UI.toast('Escribe el nombre del negocio', 'error');
         if (fiado && !f.fechaPago.value) return UI.toast('Elige el día de pago', 'error');
-        if (!fiado && pm !== monedaActual && Tasa.valor() <= 0) {
+        if (!fiado && lineas.some(l => l.moneda !== pm) && Tasa.valor() <= 0) {
           return UI.toast('Primero guarda la tasa BCV (sección Dólar)', 'error');
         }
 
-        Store.add('ventas', {
-          productoId: p.id,
-          nombre: p.nombre,
-          cantidad,
-          precioUnit,
-          total: cantidad * precioUnit,
-          costoUnit: p.costo,
-          moneda: monedaActual,
-          precioOrig,
-          tipo: f.tipo.value,
-          cliente,
-          fiado,
-          fechaPago: fiado ? f.fechaPago.value : null,
-          pagado: !fiado,
-          pagoMoneda: fiado ? null : pm,
-          pagoMonto: fiado ? null : redondea(montoPago(), 2),
-          fecha: f.fecha.value || Utils.today(),
-          tasa: Tasa.valor()
+        const ticket = Ventas.nuevoTicket();
+        const fecha = f.fecha.value || Utils.today();
+
+        lineas.forEach(l => {
+          const precioUnit = usdDe(l);
+          Store.add('ventas', {
+            ticket,
+            productoId: l.p.id,
+            nombre: l.p.nombre,
+            cantidad: l.cantidad,
+            precioUnit,
+            total: l.cantidad * precioUnit,
+            costoUnit: l.p.costo,
+            moneda: l.moneda,
+            precioOrig: l.precioOrig,
+            tipo,
+            cliente,
+            fiado,
+            fechaPago: fiado ? f.fechaPago.value : null,
+            pagado: !fiado,
+            pagoMoneda: fiado ? null : pm,
+            pagoMonto: fiado ? null : redondea(pagoLinea(l, pm), 2),
+            fecha,
+            tasa: Tasa.valor()
+          });
         });
+
         UI.closeModal();
-        UI.toast('Venta registrada');
+        UI.toast(lineas.length > 1 ? `Venta registrada (${lineas.length} productos)` : 'Venta registrada');
       });
     });
   }
@@ -279,19 +366,41 @@ const Ventas = {
 Modules.ventas = {
   filtro: 'todas',
 
+  // Junta en un solo grupo las ventas que comparten ticket
+  agrupar(lista) {
+    const mapa = new Map();
+    const grupos = [];
+    lista.forEach(v => {
+      if (v.ticket) {
+        if (!mapa.has(v.ticket)) {
+          const g = { ticket: v.ticket, lineas: [] };
+          mapa.set(v.ticket, g);
+          grupos.push(g);
+        }
+        mapa.get(v.ticket).lineas.push(v);
+      } else {
+        grupos.push({ ticket: null, lineas: [v] });
+      }
+    });
+    grupos.forEach(g => g.lineas.reverse());   // en el orden en que se agregaron
+    return grupos;
+  },
+
   render(container) {
     const todas = Store.all('ventas').slice().reverse();
     const hoy = Utils.today();
     const deHoy = todas.filter(v => v.fecha === hoy);
     const totalHoy = deHoy.reduce((a, v) => a + v.total, 0);
     const gananciaHoy = deHoy.reduce((a, v) => a + (v.total - v.cantidad * v.costoUnit), 0);
+    const ventasHoy = this.agrupar(deHoy).length;
 
-    const visibles = todas.filter(v => {
+    const pasa = v => {
       if (this.filtro === 'detal') return v.tipo === 'detal';
       if (this.filtro === 'negocio') return v.tipo === 'negocio';
       if (this.filtro === 'fiado') return v.fiado;
       return true;
-    }).slice(0, 100);
+    };
+    const visibles = this.agrupar(todas).filter(g => pasa(g.lineas[0])).slice(0, 100);
 
     container.innerHTML = `
       <div class="grid grid-3">
@@ -310,7 +419,7 @@ Modules.ventas = {
         <div class="card stat">
           <div class="stat-icon"><i data-lucide="receipt"></i></div>
           <span class="stat-label">Ventas hoy</span>
-          <span class="stat-value">${deHoy.length}</span>
+          <span class="stat-value">${ventasHoy}</span>
           <span class="stat-sub">${Utils.formatDate(hoy)}</span>
         </div>
       </div>
@@ -326,7 +435,7 @@ Modules.ventas = {
         </select>
       </div>
 
-      ${visibles.length ? `<div class="list">${visibles.map(v => this.card(v)).join('')}</div>` : `
+      ${visibles.length ? `<div class="list">${visibles.map(g => this.card(g)).join('')}</div>` : `
         <div class="card empty">
           <i data-lucide="shopping-bag"></i>
           <p>Aún no hay ventas registradas.</p>
@@ -336,11 +445,19 @@ Modules.ventas = {
     container.onclick = e => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
-      if (btn.dataset.action === 'nueva') Ventas.openSale();
-      if (btn.dataset.action === 'factura') Factura.nuevaDesdeVenta(btn.dataset.id);
-      if (btn.dataset.action === 'borrar') {
-        if (UI.confirm('¿Borrar esta venta? La mercancía vuelve al inventario.')) {
-          Store.remove('ventas', btn.dataset.id);
+      const a = btn.dataset.action;
+      if (a === 'nueva') Ventas.openSale();
+      if (a === 'factura') {
+        if (btn.dataset.ticket) Factura.deTicket(btn.dataset.ticket);
+        else Factura.nuevaDesdeVenta(btn.dataset.id);
+      }
+      if (a === 'borrar') {
+        const ids = btn.dataset.ids.split(',');
+        const msg = ids.length > 1
+          ? `¿Borrar esta venta de ${ids.length} productos? La mercancía vuelve al inventario.`
+          : '¿Borrar esta venta? La mercancía vuelve al inventario.';
+        if (UI.confirm(msg)) {
+          ids.forEach(id => Store.remove('ventas', id));
           UI.toast('Venta borrada');
         }
       }
@@ -351,40 +468,57 @@ Modules.ventas = {
     };
   },
 
-  card(v) {
-    // Fiado sin pagar: se muestra con la tasa de hoy. Lo demás, con la tasa del día de la venta.
-    const tasa = (v.fiado && !v.pagado) ? Tasa.valor() : (v.tasa || Tasa.valor());
-    const gan = v.total - v.cantidad * v.costoUnit;
+  card(g) {
+    const L = g.lineas;
+    const v = L[0];
+    const total = L.reduce((a, x) => a + x.total, 0);
+    const gan = L.reduce((a, x) => a + (x.total - x.cantidad * x.costoUnit), 0);
+    const debe = v.fiado && L.some(x => !x.pagado);
+    const pendiente = L.find(x => !x.pagado) || v;
+    // Fiado sin pagar: tasa de hoy. Lo demás, la tasa del día de la venta.
+    const tasa = debe ? Tasa.valor() : (v.tasa || Tasa.valor());
     const pagoTxt = v.pagoMoneda ? ' · ' + (v.pagoMoneda === 'BS' ? 'Bs' : '$') : '';
+
+    const titulo = L.length === 1
+      ? `${Utils.esc(v.nombre)} × ${Inventario.q(v.cantidad)}`
+      : `${L.length} productos`;
+    const detalle = L.length > 1
+      ? `<div class="muted" style="font-size:.85rem;margin-top:6px">${L.map(x => `${Utils.esc(x.nombre)} × ${Inventario.q(x.cantidad)}`).join(' · ')}</div>`
+      : '';
+
+    const botonFactura = g.ticket
+      ? `<button class="icon-btn" data-action="factura" data-ticket="${g.ticket}" aria-label="Factura"><i data-lucide="file-text"></i></button>`
+      : (v.cliente ? `<button class="icon-btn" data-action="factura" data-id="${v.id}" aria-label="Factura"><i data-lucide="file-text"></i></button>` : '');
 
     return `
       <div class="card item">
         <div class="item-head">
           <div>
-            <div class="item-name">${Utils.esc(v.nombre)} × ${Inventario.q(v.cantidad)}</div>
+            <div class="item-name">${titulo}</div>
             <div class="item-meta">
               <span>${Utils.formatDate(v.fecha)}</span>
               ${v.cliente ? `<span><b>${Utils.esc(v.cliente)}</b></span>` : ''}
             </div>
+            ${detalle}
           </div>
           <div style="text-align:right">
-            <div class="profit">${Utils.usd(v.total)}</div>
-            <div class="item-meta" style="justify-content:flex-end">${Utils.bs(v.total * tasa)}</div>
+            <div class="profit">${Utils.usd(total)}</div>
+            <div class="item-meta" style="justify-content:flex-end">${Utils.bs(total * tasa)}</div>
           </div>
         </div>
         <div class="item-foot">
           <div class="row">
             <span class="badge">${v.tipo === 'negocio' ? 'Al mayor' : 'Al detal'}</span>
             ${v.fiado
-              ? (v.pagado
-                  ? '<span class="badge badge-success">Fiado pagado</span>'
-                  : `<span class="badge badge-warning">Debe · paga ${Utils.formatDate(v.fechaPago)}</span>`)
+              ? (debe
+                  ? `<span class="badge badge-warning">Debe · paga ${Utils.formatDate(pendiente.fechaPago)}</span>`
+                  : '<span class="badge badge-success">Fiado pagado</span>')
               : `<span class="badge badge-success">Contado${pagoTxt}</span>`}
             <span class="muted" style="font-size:.8rem">Ganancia ${Utils.usd(gan)}</span>
           </div>
           <div class="item-actions">
-            ${v.cliente ? `<button class="icon-btn" data-action="factura" data-id="${v.id}" aria-label="Mini factura"><i data-lucide="file-text"></i></button>` : ''}
-            <button class="icon-btn" data-action="borrar" data-id="${v.id}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
+            ${botonFactura}
+            <button class="icon-btn" data-action="borrar" data-ids="${L.map(x => x.id).join(',')}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
           </div>
         </div>
       </div>`;

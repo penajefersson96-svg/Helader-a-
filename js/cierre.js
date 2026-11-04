@@ -124,6 +124,7 @@ const Cierre = {
         </div>
 
         <button type="submit" class="btn btn-primary btn-block"><i data-lucide="calendar-check"></i> Guardar cierre</button>
+        ${p ? '<button type="button" class="btn btn-soft btn-block" data-comp="1"><i data-lucide="file-text"></i> Ver comprobante</button>' : ''}
       </form>
 
       ${cierres.length ? `
@@ -186,6 +187,7 @@ const Cierre = {
       });
 
       body.onclick = e => {
+        if (e.target.closest('[data-comp]')) return Comprobante.cierre(fecha);
         const b = e.target.closest('[data-fecha]');
         if (b) this.abrir(b.dataset.fecha);
       };
@@ -240,6 +242,7 @@ const Cierre = {
 
         UI.closeModal();
         UI.toast('Cierre guardado');
+        Comprobante.cierre(dia);
       });
     });
   }
