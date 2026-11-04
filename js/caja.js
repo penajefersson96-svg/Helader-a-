@@ -27,8 +27,9 @@ const Caja = {
         m.push({
           id: 'v' + v.id, tipo: 'ingreso', auto: true, categoria: 'Ventas',
           concepto: `Venta: ${v.nombre} × ${Inventario.q(v.cantidad)}`,
-          monto: moneda === 'BS' ? v.precioOrig * v.cantidad : v.total,
-          moneda, fecha: v.fecha, creado: v.creado
+                    monto: v.pagoMonto ?? (moneda === 'BS' ? v.precioOrig * v.cantidad : v.total),
+            moneda: v.pagoMoneda ? mon(v.pagoMoneda) : moneda,
+            fecha: v.fecha, creado: v.creado
         });
       }
       (v.abonos || []).forEach((a, i) => m.push({

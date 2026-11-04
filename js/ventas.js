@@ -3,16 +3,14 @@
    Cada venta guarda:
    { productoId, nombre, cantidad, precioUnit (USD), total (USD), costoUnit,
      moneda, precioOrig, tipo: 'detal'|'negocio', cliente,
-     fiado, fechaPago, pagado, fecha, tasa }
-   Las existencias se calculan solas a partir de las ventas.
+     fiado, fechaPago, pagado, pagoMoneda, pagoMonto, fecha, tasa }
    ========================================================= */
 
 const Ventas = {
 
+  // Nombres de clientes guardados (directorio + los que ya aparecen en ventas)
   clientes() {
-    const set = new Set();
-    Store.all('ventas').forEach(v => v.cliente && set.add(v.cliente));
-    return [...set].sort((a, b) => a.localeCompare(b));
+    return Clientes.lista().map(c => c.nombre);
   },
 
   openSale(productoId) {
@@ -27,14 +25,11 @@ const Ventas = {
 
     const html = `
       <form class="form" id="venta-form" autocomplete="off">
-        <div class="field">
+        <div class="field has-picker">
           <label>Producto</label>
-          <select name="producto">
-            ${disponibles.map(({ p, s }) => `
-              <option value="${p.id}" ${p.id === productoId ? 'selected' : ''}>
-                ${Utils.esc(p.nombre)} (quedan ${Inventario.q(s.restante)})
-              </option>`).join('')}
-          </select>
+          <input type="text" id="buscar-prod" placeholder="Escribe una letra o el nombre" autocomplete="off">
+          <input type="hidden" name="producto" value="">
+          <div class="picker hidden" id="picker"></div>
         </div>
 
         <div class="form-row">
@@ -71,6 +66,14 @@ const Ventas = {
           </select>
         </div>
 
+        <div class="field" id="pago-moneda-box">
+          <label>¿En qué moneda te pagaron?</label>
+          <select name="pagoMoneda">
+            <option value="USD">Dólares ($)</option>
+            <option value="BS">Bolívares (Bs)</option>
+          </select>
+        </div>
+
         <div class="field">
           <label id="cliente-label">Cliente o negocio (opcional)</label>
           <input name="cliente" type="text" list="lista-clientes" placeholder="Nombre">
@@ -99,48 +102,94 @@ const Ventas = {
     UI.openModal('Nueva venta', html, body => {
       const f = body.querySelector('#venta-form');
       const prev = body.querySelector('#venta-preview');
+      const buscar = body.querySelector('#buscar-prod');
+      const picker = body.querySelector('#picker');
       const fechaBox = body.querySelector('#fecha-pago-box');
+      const pagoBox = body.querySelector('#pago-moneda-box');
       const cliLabel = body.querySelector('#cliente-label');
 
-      const productoActual = () => disponibles.find(d => d.p.id === f.producto.value);
       const redondea = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
+      const productoActual = () => disponibles.find(d => d.p.id === f.producto.value);
       let monedaActual = 'USD';
+      let pagoTocado = false;
+      let pk = null;
 
-      // Precio en dólares según lo que esté escrito y la moneda elegida
       const precioUsd = () => {
         const v = Utils.num(f.precio.value);
         return monedaActual === 'BS' ? Tasa.toUsd(v) : v;
       };
 
+      // Lo que realmente se cobra, en la moneda en que te pagan
+      const montoPago = () => {
+        const total = Utils.num(f.cantidad.value) * Utils.num(f.precio.value);
+        const pm = f.pagoMoneda.value;
+        if (pm === monedaActual) return total;
+        return pm === 'BS' ? total * Tasa.valor() : Tasa.toUsd(total);
+      };
+
       const actualizar = () => {
+        const d = productoActual();
+        if (!d) {
+          prev.innerHTML = '<div><span>Elige un producto para ver el total</span></div>';
+          return;
+        }
         const cant = Utils.num(f.cantidad.value);
         const totalUsd = cant * precioUsd();
-        const gan = totalUsd - cant * productoActual().p.costo;
+        const gan = totalUsd - cant * d.p.costo;
+        const contado = f.pago.value === 'contado';
+        const pm = f.pagoMoneda.value;
         prev.innerHTML = `
           <div><span>Total en dólares</span><b>${Utils.usd(totalUsd)}</b></div>
           <div><span>Total en bolívares</span><b>${Utils.bs(Tasa.toBs(totalUsd))}</b></div>
+          ${contado ? `<div><span>Te pagan en ${pm === 'BS' ? 'bolívares' : 'dólares'}</span><b>${pm === 'BS' ? Utils.bs(montoPago()) : Utils.usd(montoPago())}</b></div>` : ''}
           <div><span>Ganancia de esta venta</span><b>${Utils.usd(gan)}</b></div>`;
       };
 
       // Pone el precio del producto (detal o mayor) en la moneda elegida
       const precioSugerido = () => {
-        const prod = productoActual().p;
-        const usd = f.tipo.value === 'negocio' ? Inventario.precioMayor(prod) : Inventario.precioDetal(prod);
+        const d = productoActual();
+        if (!d) return;
+        const usd = f.tipo.value === 'negocio' ? Inventario.precioMayor(d.p) : Inventario.precioDetal(d.p);
         f.precio.value = monedaActual === 'BS' ? redondea(Tasa.toBs(usd), 2) : redondea(usd, 4);
       };
 
-      // Al elegir producto, usa la moneda en que tiene puesto el precio
-      const elegirProducto = () => {
-        const quiereBs = productoActual().p.precioMoneda === 'BS' && Tasa.valor() > 0;
-        monedaActual = quiereBs ? 'BS' : 'USD';
-        f.moneda.value = monedaActual;
-        precioSugerido();
+      const sugerirPagoMoneda = () => {
+        if (!pagoTocado) f.pagoMoneda.value = monedaActual;
       };
 
-      f.producto.addEventListener('change', () => { elegirProducto(); actualizar(); });
+      const seleccionar = id => {
+        f.producto.value = id;
+        const d = productoActual();
+        if (pk) pk.fijar(d.p.nombre);
+
+        const quiereBs = d.p.precioMoneda === 'BS' && Tasa.valor() > 0;
+        monedaActual = quiereBs ? 'BS' : 'USD';
+        f.moneda.value = monedaActual;
+        sugerirPagoMoneda();
+        precioSugerido();
+        actualizar();
+        f.cantidad.focus();
+        f.cantidad.select();
+      };
+
+      // Buscador desplegable: muestra pocos productos y filtra al escribir
+      pk = Picker.attach({
+        input: buscar,
+        list: picker,
+        items: disponibles.map(d => ({
+          id: d.p.id,
+          nombre: d.p.nombre,
+          categoria: d.p.categoria,
+          sub: `quedan ${Inventario.q(d.s.restante)}`,
+          precio: Utils.usd(Inventario.precioDetal(d.p)),
+          pop: d.s.vendidos
+        })),
+        onSelect: item => seleccionar(item.id),
+        onClear: () => { f.producto.value = ''; actualizar(); }
+      });
+
       f.tipo.addEventListener('change', () => { precioSugerido(); actualizar(); });
 
-      // Al cambiar $ <-> Bs se convierte el monto que ya está escrito
       f.moneda.addEventListener('change', () => {
         const nueva = f.moneda.value;
         const t = Tasa.valor();
@@ -153,35 +202,53 @@ const Ventas = {
           f.precio.value = nueva === 'BS' ? redondea(v * t, 2) : redondea(v / t, 4);
         }
         monedaActual = nueva;
+        sugerirPagoMoneda();
         actualizar();
       });
+
+      f.pagoMoneda.addEventListener('change', () => { pagoTocado = true; actualizar(); });
 
       const fiadoCambio = () => {
         const esFiado = f.pago.value === 'fiado';
         fechaBox.classList.toggle('hidden', !esFiado);
+        pagoBox.classList.toggle('hidden', esFiado);
         cliLabel.textContent = esFiado ? 'Cliente o negocio (obligatorio)' : 'Cliente o negocio (opcional)';
+        actualizar();
       };
       f.pago.addEventListener('change', fiadoCambio);
       f.addEventListener('input', actualizar);
 
-      elegirProducto();
-      actualizar();
+      // Arranque: si viene de la tarjeta de un producto, ya lo elige; si no, abre el buscador
+      if (productoId && disponibles.some(d => d.p.id === productoId)) {
+        seleccionar(productoId);
+      } else {
+        actualizar();
+        buscar.focus();
+      }
       fiadoCambio();
 
       f.addEventListener('submit', e => {
         e.preventDefault();
-        const { p, s } = productoActual();
+        const d = productoActual();
+        if (!d) return UI.toast('Elige un producto de la lista', 'error');
+
+        const { p, s } = d;
         const cantidad = Utils.num(f.cantidad.value);
         const precioOrig = Utils.num(f.precio.value);
         const precioUnit = precioUsd();
         const fiado = f.pago.value === 'fiado';
         const cliente = f.cliente.value.trim();
+        const pm = f.pagoMoneda.value;
 
         if (cantidad <= 0) return UI.toast('Escribe la cantidad', 'error');
         if (cantidad > s.restante) return UI.toast(`Solo quedan ${Inventario.q(s.restante)}`, 'error');
         if (precioOrig <= 0 || precioUnit <= 0) return UI.toast('Escribe el precio', 'error');
         if (fiado && !cliente) return UI.toast('Escribe a quién le fías', 'error');
+        if (f.tipo.value === 'negocio' && !cliente) return UI.toast('Escribe el nombre del negocio', 'error');
         if (fiado && !f.fechaPago.value) return UI.toast('Elige el día de pago', 'error');
+        if (!fiado && pm !== monedaActual && Tasa.valor() <= 0) {
+          return UI.toast('Primero guarda la tasa BCV (sección Dólar)', 'error');
+        }
 
         Store.add('ventas', {
           productoId: p.id,
@@ -197,6 +264,8 @@ const Ventas = {
           fiado,
           fechaPago: fiado ? f.fechaPago.value : null,
           pagado: !fiado,
+          pagoMoneda: fiado ? null : pm,
+          pagoMonto: fiado ? null : redondea(montoPago(), 2),
           fecha: f.fecha.value || Utils.today(),
           tasa: Tasa.valor()
         });
@@ -268,6 +337,7 @@ Modules.ventas = {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       if (btn.dataset.action === 'nueva') Ventas.openSale();
+      if (btn.dataset.action === 'factura') Factura.nuevaDesdeVenta(btn.dataset.id);
       if (btn.dataset.action === 'borrar') {
         if (UI.confirm('¿Borrar esta venta? La mercancía vuelve al inventario.')) {
           Store.remove('ventas', btn.dataset.id);
@@ -285,6 +355,7 @@ Modules.ventas = {
     // Fiado sin pagar: se muestra con la tasa de hoy. Lo demás, con la tasa del día de la venta.
     const tasa = (v.fiado && !v.pagado) ? Tasa.valor() : (v.tasa || Tasa.valor());
     const gan = v.total - v.cantidad * v.costoUnit;
+    const pagoTxt = v.pagoMoneda ? ' · ' + (v.pagoMoneda === 'BS' ? 'Bs' : '$') : '';
 
     return `
       <div class="card item">
@@ -308,10 +379,13 @@ Modules.ventas = {
               ? (v.pagado
                   ? '<span class="badge badge-success">Fiado pagado</span>'
                   : `<span class="badge badge-warning">Debe · paga ${Utils.formatDate(v.fechaPago)}</span>`)
-              : '<span class="badge badge-success">Contado</span>'}
+              : `<span class="badge badge-success">Contado${pagoTxt}</span>`}
             <span class="muted" style="font-size:.8rem">Ganancia ${Utils.usd(gan)}</span>
           </div>
-          <button class="icon-btn" data-action="borrar" data-id="${v.id}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
+          <div class="item-actions">
+            ${v.cliente ? `<button class="icon-btn" data-action="factura" data-id="${v.id}" aria-label="Mini factura"><i data-lucide="file-text"></i></button>` : ''}
+            <button class="icon-btn" data-action="borrar" data-id="${v.id}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>
+          </div>
         </div>
       </div>`;
   }

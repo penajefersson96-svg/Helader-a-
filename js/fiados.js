@@ -67,7 +67,7 @@ const Fiados = {
           <div><span>Equivale hoy a</span><b>${this.otra(it.pendiente, it.moneda)}</b></div>
         </div>
         <div class="field">
-          <label>Monto que paga</label>
+          <label>¿Cuánto pagó y en qué moneda?</label>
           <div class="input-group">
             <input name="monto" type="text" inputmode="decimal" placeholder="0,00">
             <select name="moneda">
@@ -140,8 +140,13 @@ const Fiados = {
     UI.toast('Pago deshecho');
   },
 
-  /* ---------- Agregar deuda manual ---------- */
+  /* ---------- Agregar deuda (con buscador de mercancía) ---------- */
   nuevaDeuda() {
+    const ventas = Store.all('ventas');
+    const disponibles = Store.all('productos')
+      .map(p => ({ p, s: Inventario.stats(p, ventas) }))
+      .filter(d => d.s.restante > 0);
+
     const clientes = [...new Set([
       ...Ventas.clientes(),
       ...Store.all('deudas').map(d => d.cliente)
@@ -154,17 +159,38 @@ const Fiados = {
           <input name="cliente" type="text" list="lista-deudores" placeholder="Nombre">
           <datalist id="lista-deudores">${clientes.map(c => `<option value="${Utils.esc(c)}">`).join('')}</datalist>
         </div>
-        <div class="field">
+
+        <div class="field has-picker">
           <label>¿Qué se le fió?</label>
-          <input name="concepto" type="text" placeholder="Ej: 2 cajas de refresco">
+          <input name="concepto" type="text" placeholder="Escribe para buscar en tu mercancía" autocomplete="off">
+          <input type="hidden" name="productoId" value="">
+          <div class="picker hidden" id="picker-deuda"></div>
+          <span class="hint">Si es algo que no está en tu mercancía, escríbelo y pon el monto.</span>
         </div>
+
+        <div class="form-row hidden" id="prod-box">
+          <div class="field">
+            <label>Cantidad</label>
+            <input name="cantidad" type="text" inputmode="decimal" value="1">
+          </div>
+          <div class="field">
+            <label>Precio</label>
+            <select name="tipo">
+              <option value="detal">Al detal</option>
+              <option value="negocio">Al mayor</option>
+            </select>
+          </div>
+        </div>
+
         <div class="field">
           <label>Monto que debe</label>
           <div class="input-group">
             <input name="monto" type="text" inputmode="decimal" placeholder="0,00">
             <select name="moneda"><option value="USD">$</option><option value="BS">Bs</option></select>
           </div>
+          <span class="hint hidden" id="aviso-prod"></span>
         </div>
+
         <div class="form-row">
           <div class="field">
             <label>Fecha del fiado</label>
@@ -180,22 +206,96 @@ const Fiados = {
 
     UI.openModal('Agregar deuda', html, body => {
       const f = body.querySelector('#deuda-form');
+      const prodBox = body.querySelector('#prod-box');
+      const aviso = body.querySelector('#aviso-prod');
+      const redondea = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
+      const prod = () => disponibles.find(d => d.p.id === f.productoId.value);
+
+      // Con un producto elegido, el monto se calcula solo (cantidad × precio)
+      const auto = () => {
+        const d = prod();
+        if (!d) return;
+        const unit = f.tipo.value === 'negocio' ? Inventario.precioMayor(d.p) : Inventario.precioDetal(d.p);
+        const usd = unit * Utils.num(f.cantidad.value);
+        f.monto.value = f.moneda.value === 'BS' ? redondea(Tasa.toBs(usd), 2) : redondea(usd, 2);
+      };
+
+      Picker.attach({
+        input: f.concepto,
+        list: body.querySelector('#picker-deuda'),
+        items: disponibles.map(d => ({
+          id: d.p.id, nombre: d.p.nombre, categoria: d.p.categoria,
+          sub: `quedan ${Inventario.q(d.s.restante)}`,
+          precio: Utils.usd(Inventario.precioDetal(d.p)),
+          pop: d.s.vendidos
+        })),
+        onSelect: item => {
+          f.productoId.value = item.id;
+          const d = prod();
+          prodBox.classList.remove('hidden');
+          aviso.classList.remove('hidden');
+          aviso.textContent = 'Se descontará de tu mercancía. Quedan ' + Inventario.q(d.s.restante) + '.';
+          f.moneda.value = (d.p.precioMoneda === 'BS' && Tasa.valor() > 0) ? 'BS' : 'USD';
+          auto();
+          f.cantidad.focus();
+          f.cantidad.select();
+        },
+        onClear: () => {
+          f.productoId.value = '';
+          prodBox.classList.add('hidden');
+          aviso.classList.add('hidden');
+        }
+      });
+
+      f.cantidad.addEventListener('input', auto);
+      f.tipo.addEventListener('change', auto);
+      f.moneda.addEventListener('change', () => {
+        if (f.moneda.value === 'BS' && Tasa.valor() <= 0) {
+          f.moneda.value = 'USD';
+          return UI.toast('Primero guarda la tasa BCV (sección Dólar)', 'error');
+        }
+        auto();
+      });
+
       f.addEventListener('submit', e => {
         e.preventDefault();
+        const cliente = f.cliente.value.trim();
         const total = Utils.num(f.monto.value);
-        if (!f.cliente.value.trim()) return UI.toast('Escribe el nombre', 'error');
+        const mon = f.moneda.value;
+        const d = prod();
+
+        if (!cliente) return UI.toast('Escribe el nombre del cliente', 'error');
         if (total <= 0) return UI.toast('Escribe el monto', 'error');
         if (!f.fechaPago.value) return UI.toast('Elige el día de pago', 'error');
-        Store.add('deudas', {
-          cliente: f.cliente.value.trim(),
-          concepto: f.concepto.value.trim(),
-          moneda: f.moneda.value, total,
-          fecha: f.fecha.value || Utils.today(),
-          fechaPago: f.fechaPago.value,
-          abonos: [], pagado: false
-        });
+
+        if (d) {
+          // Fiado de mercancía: se registra como venta fiada y descuenta el inventario
+          const cantidad = Utils.num(f.cantidad.value);
+          if (cantidad <= 0) return UI.toast('Escribe la cantidad', 'error');
+          if (cantidad > d.s.restante) return UI.toast(`Solo quedan ${Inventario.q(d.s.restante)}`, 'error');
+          const totalUsd = mon === 'BS' ? Tasa.toUsd(total) : total;
+
+          Store.add('ventas', {
+            productoId: d.p.id, nombre: d.p.nombre, cantidad,
+            precioUnit: totalUsd / cantidad, total: totalUsd, costoUnit: d.p.costo,
+            moneda: mon, precioOrig: total / cantidad, tipo: f.tipo.value,
+            cliente, fiado: true, fechaPago: f.fechaPago.value, pagado: false,
+            pagoMoneda: null, pagoMonto: null,
+            fecha: f.fecha.value || Utils.today(), tasa: Tasa.valor()
+          });
+          UI.toast('Fiado registrado y descontado de la mercancía');
+        } else {
+          // Otra cosa que no está en la mercancía
+          Store.add('deudas', {
+            cliente, concepto: f.concepto.value.trim(),
+            moneda: mon, total,
+            fecha: f.fecha.value || Utils.today(),
+            fechaPago: f.fechaPago.value,
+            abonos: [], pagado: false
+          });
+          UI.toast('Deuda guardada');
+        }
         UI.closeModal();
-        UI.toast('Deuda guardada');
       });
     });
   }

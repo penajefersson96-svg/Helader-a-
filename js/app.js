@@ -8,6 +8,7 @@ const App = {
     dashboard: { title: 'Inicio', subtitle: 'Resumen de tu negocio' },
     inventario: { title: 'Mercancía', subtitle: 'Lo que compras y a cuánto lo vendes' },
     catalogo:    { title: 'Catálogo',   subtitle: 'Tus precios al detal y al mayor' },
+    clientes:    { title: 'Clientes',   subtitle: 'Personas y negocios a los que vendes' },
     ventas: { title: 'Ventas', subtitle: 'Registra lo que vendes' },
     fiados: { title: 'Fiados', subtitle: 'Quién te debe y cuándo paga' },
     caja: { title: 'Caja', subtitle: 'Tu dinero, gastos y lo que queda' },

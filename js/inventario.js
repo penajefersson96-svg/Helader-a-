@@ -3,7 +3,7 @@
    Cada "producto" es un lote comprado:
    {
      id, nombre, categoria, cantidad, fecha,
-     costoTotal (USD, lo pagado por todo el lote), costo (USD por unidad),
+     costoTotal (USD), costo (USD por unidad),
      costoMoneda ('USD'|'BS'), costoOriginal, tasaCompra,
      precioMoneda ('USD'|'BS'), precioDetalOrig, precioMayorOrig
    }
@@ -12,22 +12,108 @@
 const Inventario = {
   categoriasBase: ['Helados', 'Bebidas', 'Snacks', 'Otros'],
 
+  // Quita tildes y mayúsculas para buscar fácil
+  norm(s) {
+    return String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  },
+
+  /* ---------- Categorías ---------- */
   categorias() {
-    const set = new Set(this.categoriasBase);
+    const guardadas = Store.get('categorias', null) ?? this.categoriasBase;
+    const set = new Set(guardadas);
     Store.all('productos').forEach(p => p.categoria && set.add(p.categoria));
     return [...set].sort((a, b) => a.localeCompare(b));
   },
 
-  // Cantidad: sin decimales si es entera, con decimales si no
+  guardarCategoria(nombre) {
+    const lista = this.categorias();
+    if (!lista.some(c => c.toLowerCase() === nombre.toLowerCase())) {
+      Store.set('categorias', [...lista, nombre]);
+    }
+  },
+
+  renombrarCategoria(viejo, nuevo) {
+    if (!nuevo || nuevo === viejo) return;
+    const lista = [...new Set(this.categorias().map(c => (c === viejo ? nuevo : c)))];
+    Store.set('productos', Store.all('productos').map(p => (p.categoria === viejo ? { ...p, categoria: nuevo } : p)));
+    Store.set('categorias', lista);
+  },
+
+  eliminarCategoria(nombre) {
+    const prods = Store.all('productos');
+    const usados = prods.filter(p => p.categoria === nombre).length;
+    const aviso = usados
+      ? `¿Borrar "${nombre}"? Sus ${usados} producto(s) pasarán a "Otros".`
+      : `¿Borrar la categoría "${nombre}"?`;
+    if (!UI.confirm(aviso)) return false;
+
+    const lista = this.categorias().filter(c => c !== nombre);
+    if (usados) {
+      Store.set('productos', prods.map(p => (p.categoria === nombre ? { ...p, categoria: 'Otros' } : p)));
+      if (!lista.includes('Otros')) lista.push('Otros');
+    }
+    Store.set('categorias', lista);
+    return true;
+  },
+
+  abrirCategorias() {
+    UI.openModal('Categorías', '<div id="cat-manager"></div>', body => {
+      const box = body.querySelector('#cat-manager');
+
+      const pintar = () => {
+        const prods = Store.all('productos');
+        box.innerHTML = `
+          <p class="muted" style="font-size:.85rem;margin-bottom:12px">
+            Para cambiar un nombre, escríbelo y toca fuera del cuadro.
+            Si borras una categoría, su mercancía pasa a "Otros".
+          </p>
+          ${this.categorias().map(c => `
+            <div class="cat-item" data-cat="${Utils.esc(c)}">
+              <input type="text" value="${Utils.esc(c)}" aria-label="Nombre de la categoría">
+              <span class="badge">${prods.filter(p => p.categoria === c).length}</span>
+              ${c === 'Otros'
+                ? '<span style="width:36px"></span>'
+                : `<button type="button" class="icon-btn" data-del="${Utils.esc(c)}" aria-label="Borrar"><i data-lucide="trash-2"></i></button>`}
+            </div>`).join('')}
+          <div class="cat-item" style="margin-top:14px">
+            <input type="text" id="cat-nueva" placeholder="Nueva categoría" autocomplete="off">
+            <button type="button" class="btn btn-primary btn-sm" id="cat-add"><i data-lucide="plus"></i> Agregar</button>
+          </div>`;
+        UI.icons();
+      };
+
+      box.onchange = e => {
+        const fila = e.target.closest('[data-cat]');
+        if (!fila || e.target.tagName !== 'INPUT') return;
+        this.renombrarCategoria(fila.dataset.cat, e.target.value.trim());
+        pintar();
+      };
+
+      box.onclick = e => {
+        const del = e.target.closest('[data-del]');
+        if (del && this.eliminarCategoria(del.dataset.del)) pintar();
+
+        if (e.target.closest('#cat-add')) {
+          const input = box.querySelector('#cat-nueva');
+          const nombre = input.value.trim();
+          if (!nombre) return UI.toast('Escribe el nombre', 'error');
+          this.guardarCategoria(nombre);
+          pintar();
+        }
+      };
+
+      pintar();
+    });
+  },
+
+  /* ---------- Cantidades y precios ---------- */
   q(n) { return Utils.fmt(n, Number.isInteger(n) ? 0 : 2); },
 
-  // Precio al detal en USD (si se puso en Bs, se calcula con la tasa de hoy)
   precioDetal(p) {
     const orig = p.precioDetalOrig ?? p.precio ?? 0;
     return p.precioMoneda === 'BS' ? Tasa.toUsd(orig) : orig;
   },
 
-  // Precio al mayor en USD (si no se puso, usa el del detal)
   precioMayor(p) {
     const orig = p.precioMayorOrig;
     if (!(orig > 0)) return this.precioDetal(p);
@@ -38,7 +124,6 @@ const Inventario = {
 
   costoTotal(p) { return p.costoTotal ?? p.cantidad * p.costo; },
 
-  // Números de un lote, calculados con las ventas registradas
   stats(p, ventas) {
     const mias = ventas.filter(v => v.productoId === p.id);
     const vendidos = mias.reduce((a, v) => a + v.cantidad, 0);
@@ -58,21 +143,22 @@ const Inventario = {
 Modules.inventario = {
   filtroCat: 'todas',
   filtroEstado: 'activos',
+  busqueda: '',
+  data: [],
 
   render(container) {
     const productos = Store.all('productos');
     const ventas = Store.all('ventas');
-    const data = productos.map(p => ({ p, s: Inventario.stats(p, ventas) }));
+    this.data = productos.map(p => ({ p, s: Inventario.stats(p, ventas) }));
+    const data = this.data;
+
+    const cats = Inventario.categorias();
+    if (this.filtroCat !== 'todas' && !cats.includes(this.filtroCat)) this.filtroCat = 'todas';
 
     const invertido = data.reduce((a, d) => a + d.s.invertido, 0);
     const ingresos = data.reduce((a, d) => a + d.s.ingresos, 0);
     const ganancia = data.reduce((a, d) => a + d.s.gananciaActual, 0);
     const porVender = data.reduce((a, d) => a + Math.max(d.s.restante, 0) * Inventario.precioDetal(d.p), 0);
-
-    const visibles = data.filter(({ p, s }) =>
-      (this.filtroCat === 'todas' || p.categoria === this.filtroCat) &&
-      (this.filtroEstado === 'todos' || (this.filtroEstado === 'activos' ? !s.terminado : s.terminado))
-    ).reverse();
 
     container.innerHTML = `
       <div class="grid grid-4">
@@ -83,12 +169,19 @@ Modules.inventario = {
       </div>
 
       <div class="toolbar mt">
+        <div class="search">
+          <i data-lucide="search"></i>
+          <input id="f-buscar" type="search" autocomplete="off"
+                 placeholder="Buscar: escribe una letra o el nombre"
+                 value="${Utils.esc(this.busqueda)}">
+        </div>
         <button class="btn btn-primary" data-action="nuevo"><i data-lucide="plus"></i> Agregar mercancía</button>
+        <button class="btn btn-soft" data-action="categorias"><i data-lucide="tags"></i> Categorías</button>
+        <button class="btn btn-soft" data-action="catalogo"><i data-lucide="book-open"></i> Catálogo</button>
         <span class="spacer"></span>
         <select id="f-cat">
           <option value="todas">Todas las categorías</option>
-          ${Inventario.categorias().map(c =>
-            `<option value="${Utils.esc(c)}" ${c === this.filtroCat ? 'selected' : ''}>${Utils.esc(c)}</option>`).join('')}
+          ${cats.map(c => `<option value="${Utils.esc(c)}" ${c === this.filtroCat ? 'selected' : ''}>${Utils.esc(c)}</option>`).join('')}
         </select>
         <select id="f-estado">
           <option value="activos" ${this.filtroEstado === 'activos' ? 'selected' : ''}>En venta</option>
@@ -97,12 +190,10 @@ Modules.inventario = {
         </select>
       </div>
 
-      ${visibles.length ? `<div class="list">${visibles.map(d => this.card(d)).join('')}</div>` : `
-        <div class="card empty">
-          <i data-lucide="package-open"></i>
-          <p>${productos.length ? 'No hay mercancía con ese filtro.' : 'Aún no has agregado mercancía.'}</p>
-        </div>`}
+      <div id="inv-lista"></div>
     `;
+
+    this.pintarLista(container);
 
     container.onclick = e => {
       const btn = e.target.closest('[data-action]');
@@ -111,16 +202,46 @@ Modules.inventario = {
       const p = id ? Store.find('productos', id) : null;
       const accion = btn.dataset.action;
       if (accion === 'nuevo') this.form('nuevo');
+      if (accion === 'categorias') Inventario.abrirCategorias();
+      if (accion === 'catalogo') App.go('catalogo');
       if (accion === 'editar' && p) this.form('editar', p);
       if (accion === 'recomprar' && p) this.form('recomprar', p);
       if (accion === 'vender' && p) Ventas.openSale(p.id);
       if (accion === 'borrar' && p) this.borrar(p);
     };
 
+    // Buscar mientras se escribe (solo se redibuja la lista, no el buscador)
+    container.oninput = e => {
+      if (e.target.id === 'f-buscar') {
+        this.busqueda = e.target.value;
+        this.pintarLista(container);
+      }
+    };
+
     container.onchange = e => {
       if (e.target.id === 'f-cat') { this.filtroCat = e.target.value; this.render(container); UI.icons(); }
       if (e.target.id === 'f-estado') { this.filtroEstado = e.target.value; this.render(container); UI.icons(); }
     };
+  },
+
+  pintarLista(container) {
+    const box = container.querySelector('#inv-lista');
+    if (!box) return;
+    const q = Inventario.norm(this.busqueda.trim());
+
+    const visibles = this.data.filter(({ p, s }) =>
+      (this.filtroCat === 'todas' || p.categoria === this.filtroCat) &&
+      (this.filtroEstado === 'todos' || (this.filtroEstado === 'activos' ? !s.terminado : s.terminado)) &&
+      (!q || Inventario.norm(p.nombre).includes(q) || Inventario.norm(p.categoria).includes(q))
+    ).reverse();
+
+    box.innerHTML = visibles.length
+      ? `<div class="list">${visibles.map(d => this.card(d)).join('')}</div>`
+      : `<div class="card empty">
+           <i data-lucide="package-open"></i>
+           <p>${this.data.length ? 'No hay mercancía que coincida.' : 'Aún no has agregado mercancía.'}</p>
+         </div>`;
+    UI.icons();
   },
 
   stat(icon, label, value, sub, tone = '') {
@@ -305,7 +426,6 @@ Modules.inventario = {
           return UI.toast('Primero guarda la tasa BCV (sección Dólar)', 'error');
         }
 
-        // Si se edita y el costo en Bs no cambió, se respeta la tasa de la compra original
         let tasaCompra = tasa;
         if (modo === 'editar' && p.costoMoneda === 'BS' && costoMon === 'BS'
             && costoMonto === p.costoOriginal && p.tasaCompra) {
@@ -333,6 +453,11 @@ Modules.inventario = {
           if (cantidad < vendidos) {
             return UI.toast(`Ya vendiste ${Inventario.q(vendidos)}, la cantidad no puede ser menor`, 'error');
           }
+        }
+
+        Inventario.guardarCategoria(datos.categoria);
+
+        if (modo === 'editar') {
           Store.update('productos', p.id, datos);
           UI.toast('Mercancía actualizada');
         } else {
