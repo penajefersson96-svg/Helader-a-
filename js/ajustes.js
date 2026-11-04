@@ -15,7 +15,7 @@ const Ajustes = {
       <form class="form" id="ajustes-form" autocomplete="off">
         <div class="field">
           <label>Nombre del negocio</label>
-          <input name="negocio" type="text" placeholder="Mi Heladería" value="${v('negocio')}">
+          <input name="negocio" type="text" placeholder="Mi Tienda" value="${v('negocio')}">
         </div>
         <div class="form-row">
           <div class="field">
