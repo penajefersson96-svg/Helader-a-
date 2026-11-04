@@ -1,6 +1,6 @@
 {
-  "name": "Mi Heladería",
-  "short_name": "Heladería",
+  "name": "Mi tienda",
+  "short_name": "Tienda",
   "description": "Ventas, mercancía, fiados y caja de tu negocio",
   "start_url": "./",
   "scope": "./",
