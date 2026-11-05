@@ -110,15 +110,15 @@ const Seguridad = {
 
   /* ---------- Sesión ---------- */
   guardarSesion() {
-    try { sessionStorage.setItem('heladeria_rol', JSON.stringify({ rol: this.rol, t: Date.now() })); } catch (e) { /* nada */ }
+    try { sessionStorage.setItem('Tienda_rol', JSON.stringify({ rol: this.rol, t: Date.now() })); } catch (e) { /* nada */ }
     this.guardado = Date.now();
   },
   borrarSesion() {
-    try { sessionStorage.removeItem('heladeria_rol'); } catch (e) { /* nada */ }
+    try { sessionStorage.removeItem('Tienda_rol'); } catch (e) { /* nada */ }
   },
   leerSesion() {
     try {
-      const s = JSON.parse(sessionStorage.getItem('heladeria_rol'));
+      const s = JSON.parse(sessionStorage.getItem('Tienda_rol'));
       const max = (this.cfg().minutos || 0) * 60000;
       if (s && (s.rol === 'dueno' || s.rol === 'empleado') && (!max || Date.now() - s.t < max)) return s.rol;
     } catch (e) { /* nada */ }

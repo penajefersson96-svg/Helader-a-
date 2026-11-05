@@ -10,7 +10,7 @@
    ========================================================= */
 
 const VERSION = 'v8';
-const CACHE = 'heladeria-' + VERSION;
+const CACHE = 'Tienda-' + VERSION;
 
 const LOCAL = [
   './', 'index.html', 'manifest.json',
@@ -43,7 +43,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     const claves = await caches.keys();
-    await Promise.all(claves.filter(k => k.startsWith('heladeria-') && k !== CACHE).map(k => caches.delete(k)));
+    await Promise.all(claves.filter(k => k.startsWith('Tienda-') && k !== CACHE).map(k => caches.delete(k)));
     await self.clients.claim();
   })());
 });

@@ -1,10 +1,10 @@
 /* =========================================================
    STORE - Guarda y lee los datos en el navegador
-   Todo se guarda en localStorage con el prefijo "heladeria_"
+   Todo se guarda en localStorage con el prefijo "Tienda_"
    ========================================================= */
 
 const Store = {
-  PREFIX: 'heladeria_',
+  PREFIX: 'Tienda_',
   
   /* ---------- Lectura / escritura básica ---------- */
   get(key, fallback = null) {

@@ -213,7 +213,7 @@ Modules.dashboard = {
   /* ---------- Respaldo ---------- */
     respaldo(compartir) {
     const json = Store.exportAll();
-    const base = `respaldo-heladeria-${Utils.today()}`;
+    const base = `respaldo-Tienda-${Utils.today()}`;
     const marcar = () => Store.set('ultimoRespaldo', Utils.today());
     
     const descargar = () => {
