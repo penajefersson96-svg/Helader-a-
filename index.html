@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#38bdf8">
+    <!-- Parte 16: política de seguridad. Solo permite lo que la app necesita. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://ve.dolarapi.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
   <title>Mi Tienda</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -130,7 +133,7 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Iconos -->
-  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="js/lucide.min.js"></script>
 
   <!-- Código (el orden importa) -->
   <script src="js/utils.js"></script>

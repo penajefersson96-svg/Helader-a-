@@ -2,6 +2,13 @@
    UTILS - Funciones de ayuda usadas en todo el sistema
    ========================================================= */
 
+/* Parte 16: no permite que otra página meta esta app dentro de un marco
+   (así nadie puede taparla con botones falsos). Solo actúa en https. */
+if (location.protocol === 'https:' && window.top !== window.self) {
+  try { window.top.location = window.self.location; } catch (_) {}
+  document.documentElement.innerHTML = '';
+  throw new Error('Marco bloqueado');
+}
 // Registro de módulos: cada archivo (inventario.js, ventas.js...)
 // se registra aquí con Modules.nombre = { render(container) {...} }
 const Modules = {};

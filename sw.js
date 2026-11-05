@@ -9,8 +9,11 @@
    LOCAL y cambia VERSION.
    ========================================================= */
 
-const VERSION = 'v9';
+const VERSION = 'v11';
 const CACHE = 'Tienda-' + VERSION;
+
+// Únicos sitios externos que la app puede guardar en memoria
+const PERMITIDOS = ['unpkg.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 const LOCAL = [
   './', 'index.html', 'manifest.json',
@@ -18,7 +21,7 @@ const LOCAL = [
   'js/utils.js', 'js/storage.js', 'js/picker.js', 'js/tasa.js',
   'js/inventario.js', 'js/ventas.js', 'js/fiados.js', 'js/caja.js',
   'js/dashboard.js', 'js/catalogo.js', 'js/clientes.js', 'js/factura.js',
-  'js/mermas.js', 'js/cierre.js', 'js/comprobante.js','js/imprimir.js', 'js/devoluciones.js', 'js/ajustes.js', 'js/seguridad.js', 'js/reportes.js', 'js/app.js', 'js/pwa.js',
+  'js/mermas.js', 'js/cierre.js', 'js/comprobante.js','js/imprimir.js', 'js/devoluciones.js', 'js/ajustes.js', 'js/seguridad.js','js/lucide.min.js', 'js/reportes.js', 'js/app.js', 'js/pwa.js',
   'icons/icon-192.png', 'icons/icon-512.png'
 ];
 
@@ -43,7 +46,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     const claves = await caches.keys();
-    await Promise.all(claves.filter(k => k.startsWith('Tienda-') && k !== CACHE).map(k => caches.delete(k)));
+    await Promise.all(claves.filter(k => (k.startsWith('Tienda-') || k.startsWith('heladeria-')) && k !== CACHE).map(k => caches.delete(k)));
     await self.clients.claim();
   })());
 });
@@ -54,9 +57,9 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   
   if (url.hostname.includes('dolarapi')) return; // la tasa siempre en vivo
-  if (url.origin === location.origin) e.respondWith(propio(req));
-  else e.respondWith(externo(req));
-});
+    if (url.origin === location.origin) e.respondWith(propio(req));
+  else if (PERMITIDOS.includes(url.hostname)) e.respondWith(externo(req));
+  // cualquier otro sitio externo: no se toca ni se guarda
 
 // Archivos de la app: internet primero (máx. 4 s), si no, la copia guardada
 async function propio(req) {
