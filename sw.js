@@ -9,7 +9,7 @@
    LOCAL y cambia VERSION.
    ========================================================= */
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE = 'Tienda-' + VERSION;
 
 const LOCAL = [
