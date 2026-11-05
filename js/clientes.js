@@ -238,7 +238,7 @@ Modules.clientes = {
 
   card({ c, s }) {
     const n = Utils.esc(c.nombre);
-    const negocio = (Store.get('config', {}).negocio) || 'Mi Heladería';
+    const negocio = (Store.get('config', {}).negocio) || 'Mi Tienda';
     const msg = s.debe > 0
       ? `Hola ${c.nombre}, te escribo de ${negocio} para recordarte tu pendiente de ${Utils.usd(s.debe)}. ¡Gracias!`
       : '';

@@ -235,7 +235,7 @@ Modules.dashboard = {
     // Para compartir se usa .txt: los navegadores lo permiten, pero suelen bloquear .json
     const file = new File([json], base + '.txt', { type: 'text/plain' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: 'Respaldo Mi Heladería' })
+      navigator.share({ files: [file], title: 'Respaldo Mi Tienda' })
         .then(marcar)
         .catch(err => {
           if (err && err.name !== 'AbortError') {

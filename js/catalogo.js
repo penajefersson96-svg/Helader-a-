@@ -39,7 +39,7 @@ Modules.catalogo = {
           <div class="form-row">
             <div class="field">
               <label>Nombre del negocio (sale en el catálogo)</label>
-              <input id="cat-nombre" type="text" placeholder="Mi Heladería" value="${Utils.esc(cfg.negocio || '')}">
+              <input id="cat-nombre" type="text" placeholder="Mi Tienda" value="${Utils.esc(cfg.negocio || '')}">
             </div>
             <div class="field">
               <label>Qué mostrar</label>
@@ -115,7 +115,7 @@ Modules.catalogo = {
 
     const items = this.items();
     const cfg = Store.get('config', {});
-    const negocio = cfg.negocio || 'Mi Heladería';
+    const negocio = cfg.negocio || 'Mi Tienda';
     const tasa = Tasa.valor();
 
     const W = 720, PAD = 32, S = 2;

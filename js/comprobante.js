@@ -89,7 +89,7 @@ const Comprobante = {
     const T = txt => ops.push({ k: 't', txt });
     const G = h => ops.push({ k: 'g', h });
 
-    C(cfg.negocio || 'Mi Heladería', 26, true);
+    C(cfg.negocio || 'Mi Tienda', 26, true);
     if (cfg.rif) C('RIF: ' + cfg.rif, 15);
     if (cfg.direccion) C(cfg.direccion, 14);
     if (cfg.telefono) C('Tel: ' + cfg.telefono, 14);

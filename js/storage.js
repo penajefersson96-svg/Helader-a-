@@ -4,7 +4,7 @@
    ========================================================= */
 
 const Store = {
-  PREFIX: 'Tienda_',
+  PREFIX: 'heladeria_',
   
   /* ---------- Lectura / escritura básica ---------- */
   get(key, fallback = null) {

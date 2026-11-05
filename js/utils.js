@@ -14,7 +14,7 @@ const Utils = {
   
   /* ---------- Números y dinero ---------- */
   // Convierte texto a número. Acepta coma o punto: "12,5" -> 12.5
-    num(value) {
+  num(value) {
     let s = String(value ?? '').trim().replace(/\s/g, '');
     if (s.includes(',') && s.includes('.')) {
       // el último símbolo es el decimal; el otro separa miles
@@ -28,6 +28,16 @@ const Utils = {
     const n = parseFloat(s);
     return Number.isFinite(n) && Math.abs(n) <= 1e12 ? n : 0;
   },
+  
+  fmt(n, decimals = 2) {
+    return new Intl.NumberFormat('es-VE', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }).format(Number(n) || 0);
+  },
+  
+  usd(n) { return '$' + Utils.fmt(n); },
+  bs(n) { return Utils.fmt(n) + ' Bs'; },
   
   /* ---------- Fechas (formato guardado: AAAA-MM-DD) ---------- */
   toISODate(d) {
