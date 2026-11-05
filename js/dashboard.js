@@ -249,19 +249,23 @@ Modules.dashboard = {
     }
   },
 
-  restaurar(file) {
+    restaurar(file) {
+    if (!Seguridad.dueno()) return UI.toast('Solo el dueño puede restaurar', 'error');
+    if (file.size > 8 * 1024 * 1024) return UI.toast('Ese archivo es demasiado grande para ser un respaldo', 'error');
+    
     const lector = new FileReader();
     lector.onload = () => {
-      let datos;
-      try { datos = JSON.parse(lector.result); } catch (e) { datos = null; }
-      if (!datos || typeof datos !== 'object' || Array.isArray(datos) || !Object.keys(datos).length) {
-        return UI.toast('Ese archivo no es un respaldo válido', 'error');
-      }
-      if (!UI.confirm('Esto reemplaza TODOS los datos actuales por los del respaldo. ¿Continuar?')) return;
-      Object.keys(localStorage).filter(k => k.startsWith(Store.PREFIX)).forEach(k => localStorage.removeItem(k));
-      Store.importAll(lector.result);
-      UI.toast('Datos restaurados');
+      const texto = String(lector.result);
+      const r = Store.validarRespaldo(texto); // se revisa ANTES de tocar nada
+      if (r.error) return UI.toast(r.error, 'error');
+      
+      if (!UI.confirm('Esto reemplaza los datos actuales por los del respaldo. Antes se descargará una copia de lo que tienes ahora. ¿Continuar?')) return;
+      
+      this.respaldo(false); // copia de lo actual, por si acaso
+      const res = Store.importAll(texto);
+      if (res && res.error) UI.toast(res.error, 'error');
+      else UI.toast('Datos restaurados');
     };
     lector.readAsText(file);
   }
-};
+  };

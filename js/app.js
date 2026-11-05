@@ -53,7 +53,7 @@ const App = {
   
   go(view) {
     if (!this.views[view]) return;
-    if (!Seguridad.puede(view)) view = Seguridad.inicio();
+if (Seguridad.rol && !Seguridad.puede(view)) view = Seguridad.inicio();
     this.current = view;
     Store.PREFIX && localStorage.setItem(Store.PREFIX + 'vista', JSON.stringify(view));
     history.replaceState(null, '', '#' + view);
@@ -72,6 +72,7 @@ const App = {
   
   // Le pide al módulo de la sección actual que se dibuje
   render() {
+    if (Seguridad.activo() && !Seguridad.rol) return;   // bloqueado: no se dibuja nada
     const box = document.getElementById(`${this.current}-content`);
     const mod = Modules[this.current];
     if (!box) return;

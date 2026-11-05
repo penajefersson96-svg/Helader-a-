@@ -14,20 +14,20 @@ const Utils = {
   
   /* ---------- Números y dinero ---------- */
   // Convierte texto a número. Acepta coma o punto: "12,5" -> 12.5
-  num(value) {
-    const n = parseFloat(String(value).replace(',', '.'));
-    return isNaN(n) ? 0 : n;
+    num(value) {
+    let s = String(value ?? '').trim().replace(/\s/g, '');
+    if (s.includes(',') && s.includes('.')) {
+      // el último símbolo es el decimal; el otro separa miles
+      s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+    } else if ((s.match(/,/g) || []).length > 1) {
+      s = s.replace(/,/g, '');
+    } else {
+      s = s.replace(',', '.');
+    }
+    if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g, '');
+    const n = parseFloat(s);
+    return Number.isFinite(n) && Math.abs(n) <= 1e12 ? n : 0;
   },
-  
-  fmt(n, decimals = 2) {
-    return new Intl.NumberFormat('es-VE', {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals
-    }).format(Number(n) || 0);
-  },
-  
-  usd(n) { return '$' + Utils.fmt(n); },
-  bs(n) { return Utils.fmt(n) + ' Bs'; },
   
   /* ---------- Fechas (formato guardado: AAAA-MM-DD) ---------- */
   toISODate(d) {

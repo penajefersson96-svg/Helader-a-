@@ -9,7 +9,7 @@
    LOCAL y cambia VERSION.
    ========================================================= */
 
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = 'heladeria-' + VERSION;
 
 const LOCAL = [

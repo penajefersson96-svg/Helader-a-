@@ -109,7 +109,7 @@ Modules.calculadora = {
     form.addEventListener('submit', e => {
       e.preventDefault();
       const v = Utils.num(container.querySelector('#tasa-input').value);
-      if (v <= 0) return UI.toast('Escribe una tasa válida', 'error');
+if (v <= 0 || v > 100000) return UI.toast('Escribe una tasa válida', 'error');
       Store.setTasa(v);
       UI.toast('Tasa guardada');
       this.render(container);
@@ -124,7 +124,7 @@ Modules.calculadora = {
         const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
         const data = await res.json();
         const v = Number(data.promedio ?? data.venta);
-        if (!(v > 0)) throw new Error('Tasa inválida');
+if (!(v > 0 && v < 100000)) throw new Error('Tasa inválida');
         Store.setTasa(Math.round(v * 100) / 100);
         UI.toast('Tasa actualizada: ' + Utils.bs(v));
         this.render(container);
