@@ -251,7 +251,7 @@ const Seguridad = {
     const el = document.getElementById('lock');
     if (el) el.classList.add('lock-off');
     this.aplicar();
-    App.go(App.current);
+    App.go(this.inicio());   // al entrar con el PIN siempre se abre Inicio
     UI.icons();
   },
 
@@ -337,6 +337,7 @@ const Seguridad = {
     if (a.dataset.a === 'entrar') this.entrarConPin();
     if (a.dataset.a === 'olvide') this.vistaRecup();
     if (a.dataset.a === 'volver') this.vistaPin();
+    if (a.dataset.a === 'soporte') this.vistaSoporte();
   },
 
   async entrarConPin() {
@@ -383,9 +384,21 @@ const Seguridad = {
         </div>
         <div class="lock-msg" id="lock-msg"></div>
         <button type="submit" class="btn btn-primary btn-block">Continuar</button>
+        ${Maestra.listo() ? '<button type="button" class="lock-link" data-a="soporte">No tengo el código: pedir ayuda a soporte</button>' : ''}
         <button type="button" class="lock-link" data-a="volver">Volver</button>
       </form>`;
     UI.icons();
+  },
+
+  // Parte 20: el soporte contesta y deja poner un PIN nuevo
+  vistaSoporte() {
+    this.estado = 'soporte';
+    Maestra.pantalla({
+      tipo: 'pin',
+      mostrar: html => { const el = document.getElementById('lock'); el.innerHTML = html; UI.icons(); return el; },
+      volver: () => this.vistaRecup(),
+      exito: async () => { this.recupOk = true; this.vistaNuevo(); return true; }
+    });
   },
 
   vistaNuevo() {

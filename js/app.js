@@ -7,9 +7,9 @@ const App = {
   views: {
     dashboard: { title: 'Inicio', subtitle: 'Resumen de tu negocio' },
     inventario: { title: 'Mercancía', subtitle: 'Lo que compras y a cuánto lo vendes' },
-    catalogo:    { title: 'Catálogo',   subtitle: 'Tus precios al detal y al mayor' },
-    clientes:    { title: 'Clientes',   subtitle: 'Personas y negocios a los que vendes' },
-    reportes:    { title: 'Reportes',   subtitle: 'Lo que más vendes, tus mejores días y tu ganancia' },
+    catalogo: { title: 'Catálogo', subtitle: 'Tus precios al detal y al mayor' },
+    clientes: { title: 'Clientes', subtitle: 'Personas y negocios a los que vendes' },
+    reportes: { title: 'Reportes', subtitle: 'Lo que más vendes, tus mejores días y tu ganancia' },
     ventas: { title: 'Ventas', subtitle: 'Registra lo que vendes' },
     fiados: { title: 'Fiados', subtitle: 'Quién te debe y cuándo paga' },
     caja: { title: 'Caja', subtitle: 'Tu dinero, gastos y lo que queda' },
@@ -42,10 +42,8 @@ const App = {
       if (e.detail.key !== 'tasa') this.render();
     });
     
-    // Abre la última sección visitada (o la que venga en la URL: #ventas)
-    const fromUrl = location.hash.replace('#', '');
-    const saved = Store.get('vista', 'dashboard');
-    const start = this.views[fromUrl] ? fromUrl : (this.views[saved] ? saved : 'dashboard');
+    // Siempre abre en Inicio (antes abría la última sección visitada)
+    const start = 'dashboard';
     
     this.updateRate();
     this.go(start);
@@ -53,7 +51,7 @@ const App = {
   
   go(view) {
     if (!this.views[view]) return;
-if (Seguridad.rol && !Seguridad.puede(view)) view = Seguridad.inicio();
+    if (Seguridad.rol && !Seguridad.puede(view)) view = Seguridad.inicio();
     this.current = view;
     Store.setQuiet('vista', view);
     history.replaceState(null, '', '#' + view);
@@ -72,7 +70,7 @@ if (Seguridad.rol && !Seguridad.puede(view)) view = Seguridad.inicio();
   
   // Le pide al módulo de la sección actual que se dibuje
   render() {
-    if (Seguridad.activo() && !Seguridad.rol) return;   // bloqueado: no se dibuja nada
+    if (Seguridad.activo() && !Seguridad.rol) return; // bloqueado: no se dibuja nada
     const box = document.getElementById(`${this.current}-content`);
     const mod = Modules[this.current];
     if (!box) return;

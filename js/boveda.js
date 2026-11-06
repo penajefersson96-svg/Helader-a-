@@ -90,7 +90,7 @@ const Boveda = {
   /* ---------- Activar / desactivar ---------- */
 
   // Cifra todo lo guardado. Antes de cambiar nada comprueba que se pueda volver a abrir.
-  async activar(clave) {
+  async activar(clave, conSoporte) {
     const P = Store.PREFIX;
     const dek = crypto.getRandomValues(new Uint8Array(32));
     const codigo = this.codigoNuevo();
@@ -99,6 +99,8 @@ const Boveda = {
       c1: await this._envolver(dek, clave, this.ITER),
       c2: await this._envolver(dek, this.normalizar(codigo), this.ITER_CODIGO)
     };
+    // Parte 20: copia de la llave de datos que solo abre el soporte (solo si el dueño lo pidió)
+    if (conSoporte && Maestra.listo()) meta.c3 = await Maestra.guardarCopia(dek);
     const llave = await this._importar(dek);
     this.llave = llave;
 
@@ -159,6 +161,12 @@ const Boveda = {
     const m = this._meta();
     const bytes = m ? await this._abrirEnv(m[cual], secreto) : null;
     if (!bytes) return false;
+    return this.desbloquearConDek(bytes);
+  },
+
+  // Abre con la llave de datos ya conocida (por contraseña, código o respuesta de soporte)
+  async desbloquearConDek(bytes) {
+    try { await this._importar(bytes); } catch (e) { return false; }
     this.dek = bytes;
     this.llave = await this._importar(bytes);
 
@@ -244,10 +252,14 @@ const Boveda = {
         <div class="field"><input name="codigo" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"></div>
         <div class="lock-msg" id="lock-msg"></div>
         <button type="submit" class="btn btn-primary btn-block">Continuar</button>
+        ${(this._meta() || {}).c3 && Maestra.listo() ? '<button type="button" class="lock-link" data-a="soporte">No tengo el código: pedir ayuda a soporte</button>' : ''}
         <button type="button" class="lock-link" data-a="volver">Volver</button>
       </form>`);
     const f = el.querySelector('form');
-    el.onclick = e => { if (e.target.closest('[data-a="volver"]')) this.vistaClave(); };
+    el.onclick = e => {
+      if (e.target.closest('[data-a="volver"]')) this.vistaClave();
+      if (e.target.closest('[data-a="soporte"]')) this.vistaSoporte();
+    };
     f.onsubmit = async e => {
       e.preventDefault();
       const espera = this.intentos().hasta - Date.now();
@@ -258,6 +270,22 @@ const Boveda = {
       else { this.fallo(); b.disabled = false; this._msg('Código incorrecto'); }
     };
     f.codigo.focus();
+  },
+
+  // Parte 20: pide ayuda al soporte (solo si el dueño permitió la copia de soporte)
+  vistaSoporte() {
+    const c3 = (this._meta() || {}).c3;
+    Maestra.pantalla({
+      tipo: 'dek', c3,
+      mostrar: html => this._pantalla(html),
+      volver: () => this.vistaCodigo(),
+      exito: async r => {
+        if (!r.dek || !(await this.desbloquearConDek(r.dek))) return false;
+        this.limpiar();
+        this.vistaNueva();
+        return true;
+      }
+    });
   },
 
   // Entró con el código: debe poner una contraseña nueva antes de seguir
@@ -305,6 +333,10 @@ const Boveda = {
         <div class="field"><label>Contraseña (mínimo 8 caracteres)</label><input type="password" name="p1" autocomplete="new-password"></div>
         <div class="field"><label>Repite la contraseña</label><input type="password" name="p2" autocomplete="new-password"></div>
         <p class="hint">Antes de cifrar se descarga un respaldo. Al terminar te daré un <b>código de recuperación</b>: anótalo en papel.</p>
+        ${Maestra.listo() ? `<label style="display:flex;gap:8px;align-items:flex-start;font-size:.9rem">
+          <input type="checkbox" name="soporte" style="margin-top:3px">
+          <span>Permitir que el soporte me ayude a recuperar mis datos si lo olvido todo (guarda una copia de la llave que solo el soporte puede abrir).</span>
+        </label>` : ''}
         <label style="display:flex;gap:8px;align-items:flex-start;font-size:.9rem">
           <input type="checkbox" name="ok" style="margin-top:3px">
           <span>Entiendo que si pierdo la contraseña y el código, los datos no se pueden recuperar (solo con un respaldo).</span>
@@ -318,11 +350,12 @@ const Boveda = {
         if (f.p1.value !== f.p2.value) return UI.toast('Las contraseñas no coinciden', 'error');
         if (!f.ok.checked) return UI.toast('Marca la casilla para continuar', 'error');
         const clave = f.p1.value;
+        const conSoporte = !!(f.soporte && f.soporte.checked);
         UI.closeModal();
         Modules.dashboard.respaldo(false, async () => {
           UI.toast('Cifrando tus datos...');
           try {
-            const codigo = await this.activar(clave);
+            const codigo = await this.activar(clave, conSoporte);
             this.mostrarCodigo(codigo, 'Datos cifrados');
           } catch (err) {
             console.error(err);
@@ -339,6 +372,7 @@ const Boveda = {
         <p class="muted"><b>El cifrado está activo.</b> Los datos de este teléfono están protegidos con tu contraseña.</p>
         <button class="btn btn-soft btn-block" data-a="clave"><i data-lucide="key-round"></i> Cambiar contraseña</button>
         <button class="btn btn-soft btn-block" data-a="codigo"><i data-lucide="file-key"></i> Código de recuperación nuevo</button>
+        ${Maestra.listo() ? `<button class="btn btn-soft btn-block" data-a="soporte"><i data-lucide="life-buoy"></i> Ayuda de soporte: ${(this._meta() || {}).c3 ? 'permitida (quitar)' : 'no permitida (activar)'}</button>` : ''}
         <button class="btn btn-danger btn-block" data-a="quitar"><i data-lucide="shield-off"></i> Quitar el cifrado</button>
       </div>`, body => {
       body.querySelector('.form').addEventListener('click', e => {
@@ -349,7 +383,7 @@ const Boveda = {
   },
 
   vistaAccion(accion) {
-    const titulo = { clave: 'Cambiar contraseña', codigo: 'Código de recuperación nuevo', quitar: 'Quitar el cifrado' }[accion];
+    const titulo = { clave: 'Cambiar contraseña', codigo: 'Código de recuperación nuevo', soporte: 'Ayuda de soporte', quitar: 'Quitar el cifrado' }[accion];
     const nueva = accion === 'clave';
     UI.openModal(titulo, `
       <form class="form" id="bv-acc" autocomplete="off">
@@ -358,6 +392,7 @@ const Boveda = {
         <div class="field"><label>Repite la nueva</label><input type="password" name="p2" autocomplete="new-password"></div>` : ''}
         ${accion === 'quitar' ? '<p class="hint">Los datos volverán a guardarse sin cifrar en este teléfono.</p>' : ''}
         ${accion === 'codigo' ? '<p class="hint">El código anterior dejará de servir.</p>' : ''}
+        ${accion === 'soporte' ? `<p class="hint">${(this._meta() || {}).c3 ? 'Se borrará la copia de soporte: el soporte ya no podrá ayudarte con la contraseña.' : 'Se guardará una copia de la llave de tus datos que solo el soporte puede abrir.'}</p>` : ''}
         <button type="submit" class="btn ${accion === 'quitar' ? 'btn-danger' : 'btn-primary'} btn-block">Continuar</button>
       </form>`, body => {
       const f = body.querySelector('#bv-acc');
@@ -372,6 +407,11 @@ const Boveda = {
         try {
           if (accion === 'clave') { await this.cambiarClave(f.p1.value); UI.closeModal(); UI.toast('Contraseña cambiada'); }
           if (accion === 'codigo') { const c = await this.cambiarCodigo(); this.mostrarCodigo(c, 'Código nuevo'); }
+          if (accion === 'soporte') {
+            const m = this._meta();
+            if (m.c3) delete m.c3; else m.c3 = await Maestra.guardarCopia(this.dek);
+            this._guardarMeta(m); UI.closeModal(); UI.toast(m.c3 ? 'Soporte permitido' : 'Soporte desactivado');
+          }
           if (accion === 'quitar') { await this.desactivar(); UI.closeModal(); UI.toast('Cifrado quitado'); }
         } catch (err) { console.error(err); b.disabled = false; UI.toast('No se pudo completar', 'error'); }
       });

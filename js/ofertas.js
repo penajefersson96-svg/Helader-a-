@@ -136,26 +136,32 @@ const Ofertas = {
     return out;
   },
 
-  /* ---------- Parte del formulario de Mercancía ---------- */
+  /* ---------- Parte del formulario de Mercancía ----------
+     Las ofertas están escondidas. Un botón muestra la primera y
+     "Añadir otra oferta" muestra las siguientes (máximo 3). Cada
+     fila tiene su botón para quitarla. */
   formHtml(p, limpio) {
     const ya = this.validas(p || {});
     const fila = i => {
       const o = ya[i];
       return `
-        <div class="form-row">
-          <div class="field"><input name="ofc${i}" type="text" inputmode="numeric" placeholder="${['2', '3', '12'][i]} unidades" value="${o ? o.cant : ''}"></div>
-          <div class="field"><input name="ofp${i}" type="text" inputmode="decimal" placeholder="Precio total" value="${o ? limpio(o.precio) : ''}"></div>
-        </div>
-        <button type="button" class="btn btn-soft btn-sm hidden" data-sug="${i}"></button>`;
+        <div class="of-fila${o ? '' : ' hidden'}" data-fila="${i}">
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center">
+            <div class="field"><input name="ofc${i}" type="text" inputmode="numeric" placeholder="${['2', '3', '12'][i]} unidades" value="${o ? o.cant : ''}"></div>
+            <div class="field"><input name="ofp${i}" type="text" inputmode="decimal" placeholder="Precio total" value="${o ? limpio(o.precio) : ''}"></div>
+            <button type="button" class="btn btn-soft btn-sm" data-quitar="${i}" aria-label="Quitar esta oferta" title="Quitar esta oferta">✕</button>
+          </div>
+          <button type="button" class="btn btn-soft btn-sm hidden" data-sug="${i}"></button>
+        </div>`;
     };
     return `
       <div class="form" style="gap:8px">
-        <div class="field">
-          <label>Ofertas por cantidad (opcional)</label>
+        <div class="hidden" data-of-ayuda>
           <span class="hint">Ej: 3 unidades por $4. Te sugiero un precio, pero tú pones el final.</span>
         </div>
         ${[0, 1, 2].map(fila).join('')}
         <div class="preview hidden" id="of-prev"></div>
+        <button type="button" class="btn btn-soft btn-sm" data-of-mas></button>
       </div>`;
   },
 
@@ -201,12 +207,44 @@ const Ofertas = {
       prev.classList.toggle('hidden', !html);
     };
 
+    const filas = () => [...body.querySelectorAll('.of-fila')];
+    const mas = body.querySelector('[data-of-mas]');
+    const ayuda = body.querySelector('[data-of-ayuda]');
+    const ordenar = () => {
+      const vis = filas().filter(x => !x.classList.contains('hidden')).length;
+      mas.textContent = vis === 0 ? '+ Agregar oferta por cantidad (ej: 3 por $4)' : '+ Añadir otra oferta';
+      mas.classList.toggle('hidden', vis >= this.MAX);
+      ayuda.classList.toggle('hidden', vis === 0);
+    };
+
     f.addEventListener('click', e => {
-      const b = e.target.closest('[data-sug]');
-      if (b && b.dataset.valor) { f['ofp' + b.dataset.sug].value = b.dataset.valor; pintar(); }
+      const sug = e.target.closest('[data-sug]');
+      if (sug && sug.dataset.valor) { f['ofp' + sug.dataset.sug].value = sug.dataset.valor; pintar(); return; }
+
+      if (e.target.closest('[data-of-mas]')) {
+        const libre = filas().find(x => x.classList.contains('hidden'));
+        if (libre) {
+          libre.classList.remove('hidden');
+          ordenar();
+          const c = libre.querySelector('input');
+          if (c) c.focus();
+        }
+        return;
+      }
+
+      const q = e.target.closest('[data-quitar]');
+      if (q) {
+        const i = q.dataset.quitar;
+        f['ofc' + i].value = '';
+        f['ofp' + i].value = '';
+        body.querySelector(`.of-fila[data-fila="${i}"]`).classList.add('hidden');
+        ordenar();
+        pintar();
+      }
     });
     f.addEventListener('input', pintar);
     f.addEventListener('change', pintar);
+    ordenar();
     pintar();
   },
 

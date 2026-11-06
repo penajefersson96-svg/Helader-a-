@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Panel de soporte</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f0f9ff; color: #0c2a3f; }
+    main { max-width: 560px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.3rem; margin: 8px 0 2px; }
+    .card { background: #fff; border-radius: 16px; padding: 16px; margin: 12px 0; box-shadow: 0 2px 10px rgba(14,165,233,.12); }
+    h2 { font-size: 1.05rem; margin: 0 0 8px; }
+    p { margin: 6px 0; font-size: .92rem; }
+    .muted { color: #5b7a90; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1.5px solid #d6ecfa; border-radius: 12px; font: inherit; margin: 6px 0; }
+    textarea { font-size: .75rem; word-break: break-all; }
+    button { border: 0; border-radius: 12px; padding: 10px 14px; font: inherit; font-weight: 600; background: #0ea5e9; color: #fff; cursor: pointer; margin: 4px 4px 4px 0; }
+    button.soft { background: #e0f2fe; color: #0369a1; }
+    .ok { color: #15803d; font-weight: 600; }
+    .err { color: #dc2626; font-weight: 600; }
+    .big { font-size: 1.4rem; letter-spacing: 2px; font-weight: 700; text-align: center; padding: 8px; background: #f5fbff; border-radius: 12px; }
+    .hidden { display: none; }
+    .warn { background: #fff7ed; border-radius: 12px; padding: 10px; font-size: .88rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Panel de soporte</h1>
+  <p class="muted">Solo para el dueño del sistema. Aquí contestas a quien perdió su PIN o su contraseña. Nada sale de este teléfono.</p>
+
+  <div class="card" id="c-llave">
+    <h2>1. Mi llave maestra</h2>
+    <div id="sin-llave" class="hidden">
+      <p>Todavía no tienes llave. Se crea una sola vez. Elige una frase larga (mínimo 10 caracteres) que SOLO tú sepas: protege tu llave en este teléfono.</p>
+      <input type="password" id="f-nueva" placeholder="Frase secreta (mínimo 10 caracteres)" autocomplete="new-password">
+      <input type="password" id="f-nueva2" placeholder="Repite la frase" autocomplete="new-password">
+      <button id="b-crear">Crear mi llave maestra</button>
+    </div>
+    <div id="con-llave" class="hidden">
+      <p id="estado-llave"></p>
+      <input type="password" id="f-abrir" placeholder="Tu frase secreta" autocomplete="current-password">
+      <button id="b-abrir">Abrir mi llave</button>
+      <button class="soft" id="b-bloq">Ver / copiar mi llave pública</button>
+    </div>
+    <div id="pub-box" class="hidden">
+      <p><b>Llave pública</b> (va en <code>js/maestra.js</code>, en la línea <code>PUB: ''</code>):</p>
+      <textarea id="t-pub" readonly rows="3"></textarea>
+      <button class="soft" id="b-cpub">Copiar llave pública</button>
+      <p><b>Copia de seguridad de tu llave</b> (cifrada con tu frase; guárdala en varios sitios. Si pierdes el teléfono y esto, no podrás ayudar a nadie):</p>
+      <textarea id="t-blob" readonly rows="4"></textarea>
+      <button class="soft" id="b-cblob">Copiar copia de seguridad</button>
+      <button class="soft" id="b-restaurar">Restaurar desde una copia</button>
+    </div>
+    <div id="rest-box" class="hidden">
+      <textarea id="t-rest" rows="3" placeholder="Pega aquí la copia de seguridad"></textarea>
+      <button id="b-rest-ok">Restaurar</button>
+    </div>
+    <p id="m-llave"></p>
+  </div>
+
+  <div class="card" id="c-resp">
+    <h2>2. Contestar una solicitud</h2>
+    <div class="warn"><b>Antes de contestar:</b> llama a la persona y comprueba que reconoces su voz y que la <b>huella</b> que ves aquí es la misma que ella ve en su pantalla. Si no coincide, no contestes.</div>
+    <textarea id="t-sol" rows="4" placeholder="Pega aquí la solicitud (empieza con SOL1-)"></textarea>
+    <button id="b-resp">Generar respuesta</button>
+    <p id="m-resp"></p>
+    <div id="out" class="hidden">
+      <p>Huella de la solicitud:</p>
+      <div class="big" id="o-huella"></div>
+      <p id="o-tipo"></p>
+      <textarea id="t-res" readonly rows="5"></textarea>
+      <button id="b-cres">Copiar respuesta</button>
+      <button class="soft" id="b-sres">Compartir</button>
+    </div>
+  </div>
+</main>
+<script src="js/maestra.js"></script>
+<script src="js/panel-soporte.js"></script>
+</body>
+</html>
