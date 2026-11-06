@@ -9,7 +9,7 @@
    LOCAL y cambia VERSION.
    ========================================================= */
 
-const VERSION = 'v14';
+const VERSION = 'v15';
 const CACHE = 'Tienda-' + VERSION;
 
 // Únicos sitios externos que la app puede guardar en memoria
