@@ -11,7 +11,7 @@
 
 const Maestra = {
   // Llave pública del soporte. Se genera en soporte.html ("Crear mi llave maestra").
-  PUB: '',
+  PUB: 'BNakDlw2fMHfoZYE5k8XekF32XLo91F5ikhwRV564hEpork1ptDb8JTKcpk6XnUOz0WG2GILx2ujANNPmtlrL6Y',
 
   VIGENCIA: 48 * 3600 * 1000,   // una solicitud vale 48 horas
   CURVA: { name: 'ECDH', namedCurve: 'P-256' },
