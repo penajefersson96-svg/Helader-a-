@@ -35,7 +35,7 @@ Modules.reportes = {
     const total = ventas.reduce((a, v) => a + v.total, 0);
     const bruta = ventas.reduce((a, v) => a + v.total - v.cantidad * v.costoUnit, 0);
     const gastos = movs
-      .filter(m => m.tipo === 'gasto' && m.fecha >= desde && m.fecha <= hasta && m.categoria !== 'Ajuste de caja')
+      .filter(m => m.tipo === 'gasto' && m.fecha >= desde && m.fecha <= hasta && m.categoria !== 'Ajuste de caja' && m.categoria !== 'Cambio de divisas')
       .reduce((a, m) => a + (m.moneda === 'BS' ? Tasa.toUsd(m.monto) : m.monto), 0);
     const perdidas = mermas
       .filter(m => m.fecha >= desde && m.fecha <= hasta)

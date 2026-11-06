@@ -22,7 +22,7 @@ Modules.dashboard = {
     const mesDesde = Caja.desde('mes');
     const ganMes = suma(ventas.filter(v => v.fecha >= mesDesde), gan);
     const gastosMes = suma(
-      Store.all('movimientos').filter(m => m.tipo === 'gasto' && m.fecha >= mesDesde && m.categoria !== 'Ajuste de caja'),
+      Store.all('movimientos').filter(m => m.tipo === 'gasto' && m.fecha >= mesDesde && m.categoria !== 'Ajuste de caja' && m.categoria !== 'Cambio de divisas'),
       m => (m.moneda === 'BS' ? Tasa.toUsd(m.monto) : m.monto)
     );
     const perdidasMes = suma(Store.all('mermas').filter(m => m.fecha >= mesDesde), m => m.costo);
@@ -211,61 +211,91 @@ Modules.dashboard = {
   },
 
   /* ---------- Respaldo ---------- */
-    respaldo(compartir) {
+      respaldo(compartir, despues) {
     const json = Store.exportAll();
     const base = `respaldo-Tienda-${Utils.today()}`;
     const marcar = () => Store.set('ultimoRespaldo', Utils.today());
-    
-    const descargar = () => {
-      const file = new File([json], base + '.json', { type: 'application/json' });
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      marcar();
-      UI.toast('Respaldo descargado');
-    };
-    
-    if (!compartir) return descargar();
-    
-    // Para compartir se usa .txt: los navegadores lo permiten, pero suelen bloquear .json
-    const file = new File([json], base + '.txt', { type: 'text/plain' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: 'Respaldo Mi Tienda' })
-        .then(marcar)
-        .catch(err => {
-          if (err && err.name !== 'AbortError') {
-            UI.toast('No se pudo compartir. Se descargará.', 'error');
-            descargar();
-          }
-        });
-    } else {
-      UI.toast('Tu navegador no permite compartir. Se descargará.', 'error');
-      descargar();
-    }
+
+    // clave = contraseña elegida, o null para guardarlo sin proteger
+    Cripto.elegir(async clave => {
+      let contenido = json;
+      let cifrado = false;
+      if (clave) {
+        UI.toast('Protegiendo el respaldo...');
+        try { contenido = await Cripto.cifrar(json, clave); cifrado = true; }
+        catch (e) { return UI.toast('No se pudo cifrar el respaldo', 'error'); }
+      }
+      const nombre = base + (cifrado ? '-cifrado' : '');
+      const terminar = () => {
+        marcar();
+        UI.toast(cifrado ? 'Respaldo cifrado descargado' : 'Respaldo descargado');
+        if (despues) despues();
+      };
+
+      const descargar = () => {
+        const file = new File([contenido], nombre + '.json', { type: 'application/json' });
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        terminar();
+      };
+
+      if (!compartir) return descargar();
+
+      // Para compartir se usa .txt: los navegadores lo permiten, pero suelen bloquear .json
+      const file = new File([contenido], nombre + '.txt', { type: 'text/plain' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: 'Respaldo de mi negocio' })
+          .then(terminar)
+          .catch(err => {
+            if (err && err.name !== 'AbortError') {
+              UI.toast('No se pudo compartir. Se descargará.', 'error');
+              descargar();
+            }
+          });
+      } else {
+        UI.toast('Tu navegador no permite compartir. Se descargará.', 'error');
+        descargar();
+      }
+    });
   },
 
-    restaurar(file) {
+  restaurar(file) {
     if (!Seguridad.dueno()) return UI.toast('Solo el dueño puede restaurar', 'error');
-    if (file.size > 8 * 1024 * 1024) return UI.toast('Ese archivo es demasiado grande para ser un respaldo', 'error');
-    
+    if (file.size > 12 * 1024 * 1024) return UI.toast('Ese archivo es demasiado grande para ser un respaldo', 'error');
+
     const lector = new FileReader();
     lector.onload = () => {
       const texto = String(lector.result);
-      const r = Store.validarRespaldo(texto); // se revisa ANTES de tocar nada
-      if (r.error) return UI.toast(r.error, 'error');
-      
-      if (!UI.confirm('Esto reemplaza los datos actuales por los del respaldo. Antes se descargará una copia de lo que tienes ahora. ¿Continuar?')) return;
-      
-      this.respaldo(false); // copia de lo actual, por si acaso
+      if (!Cripto.esCifrado(texto)) return this.aplicarRespaldo(texto);
+
+      let plano = null;
+      Cripto.pedir(async clave => {
+        const r = await Cripto.descifrar(texto, clave);
+        if (r.error) { UI.toast(r.error, 'error'); return false; }
+        plano = r.texto;
+        return true;
+      }, () => this.aplicarRespaldo(plano));
+    };
+    lector.readAsText(file);
+  },
+
+  aplicarRespaldo(texto) {
+    const r = Store.validarRespaldo(texto); // se revisa ANTES de tocar nada
+    if (r.error) return UI.toast(r.error, 'error');
+
+    if (!UI.confirm('Esto reemplaza los datos actuales por los del respaldo. Antes se descargará una copia de lo que tienes ahora. ¿Continuar?')) return;
+
+    // copia de lo actual, por si acaso; cuando termina, se restaura
+    this.respaldo(false, () => {
       const res = Store.importAll(texto);
       if (res && res.error) UI.toast(res.error, 'error');
       else UI.toast('Datos restaurados');
-    };
-    lector.readAsText(file);
+    });
   }
-  };
+};

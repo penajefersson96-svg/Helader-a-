@@ -40,12 +40,14 @@ const Ajustes = {
           <input name="pie" type="text" placeholder="¡Gracias por su compra!" value="${v('pie')}">
         </div>
         <button type="button" class="btn btn-soft btn-block" data-seg><i data-lucide="lock"></i> Seguridad (PIN y empleados)</button>
+        <button type="button" class="btn btn-soft btn-block" data-bov><i data-lucide="shield-check"></i> Cifrar los datos</button>
         <button type="submit" class="btn btn-primary btn-block"><i data-lucide="check"></i> Guardar</button>
       </form>`;
 
     UI.openModal('Datos del negocio', html, body => {
       const f = body.querySelector('#ajustes-form');
       body.querySelector('[data-seg]').addEventListener('click', () => Seguridad.configurar());
+      body.querySelector('[data-bov]').addEventListener('click', () => Boveda.configurar());
       f.addEventListener('submit', e => {
         e.preventDefault();
         const t = n => f[n].value.trim();
@@ -66,7 +68,7 @@ Ajustes.aplicarNombre = function() {
   if (!n) return;
   const t = document.querySelector('.brand-text strong');
   if (t) t.textContent = n;
-  document.title = n;
+  document.addEventListener('DOMContentLoaded', () => Store.listo.then(() => Ajustes.aplicarNombre()));
 };
 document.addEventListener('DOMContentLoaded', () => Ajustes.aplicarNombre());
 window.addEventListener('store:change', e => {

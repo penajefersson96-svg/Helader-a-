@@ -142,6 +142,10 @@ const Ventas = {
         return pm === 'BS' ? tot * Tasa.valor() : Tasa.toUsd(tot);
       };
 
+            // Ofertas por cantidad: parte las líneas automáticas en la combinación más barata
+      const aplicaOfertas = () => f.tipo.value !== 'negocio';
+      const reaplicar = () => lineas.splice(0, lineas.length, ...Ofertas.expandir(lineas, aplicaOfertas(), sugeridoEn));
+      
       // Carrito + lo que esté escrito arriba (para que el total se vea al instante)
       const vista = () => {
         const out = lineas.slice();
@@ -149,9 +153,12 @@ const Ventas = {
         const cantidad = Utils.num(f.cantidad.value);
         const precioOrig = Utils.num(f.precio.value);
         if (d && cantidad > 0 && precioOrig > 0) {
-          out.push({ p: d.p, cantidad, precioOrig, moneda: monedaActual });
+                    out.push({
+            p: d.p, cantidad, precioOrig, moneda: monedaActual,
+            auto: Math.abs(precioOrig - sugeridoEn(d.p, monedaActual)) < 0.005
+          });
         }
-        return out;
+        return Ofertas.expandir(out, aplicaOfertas(), sugeridoEn);
       };
 
       const actualizar = () => {
@@ -167,6 +174,7 @@ const Ventas = {
         const monto = v.reduce((a, l) => a + pagoLinea(l, pm), 0);
         prev.innerHTML = `
           <div><span>Productos</span><b>${v.length}</b></div>
+          ${v.some(l => l.oferta) ? `<div><span>Oferta aplicada</span><b>${v.filter(l => l.oferta).map(l => Utils.esc(l.oferta)).join(' · ')}</b></div>` : ''}
           <div><span>Total en dólares</span><b>${Utils.usd(totalUsd)}</b></div>
           <div><span>Total en bolívares</span><b>${Utils.bs(Tasa.toBs(totalUsd))}</b></div>
           ${contado ? `<div><span>Te pagan en ${pm === 'BS' ? 'bolívares' : 'dólares'}</span><b>${pm === 'BS' ? Utils.bs(monto) : Utils.usd(monto)}</b></div>` : ''}
@@ -181,7 +189,7 @@ const Ventas = {
             <div class="mov">
               <div class="mov-info">
                 <b>${Utils.esc(l.p.nombre)} × ${Inventario.q(l.cantidad)}</b>
-                <span>${l.moneda === 'BS' ? Utils.bs(l.precioOrig) : Utils.usd(l.precioOrig)} c/u</span>
+                <span>${l.moneda === 'BS' ? Utils.bs(l.precioOrig) : Utils.usd(l.precioOrig)} c/u${l.oferta ? ' · oferta ' + Utils.esc(l.oferta) : ''}</span>
               </div>
               <div class="mov-amount">${Utils.usd(l.cantidad * usdDe(l))}</div>
               <button type="button" class="icon-btn" data-quitar="${i}" aria-label="Quitar"><i data-lucide="x"></i></button>
@@ -235,6 +243,7 @@ const Ventas = {
           auto: Math.abs(precioOrig - sugeridoEn(d.p, monedaActual)) < 0.005   // sin rebaja manual
         });
 
+        reaplicar();
         if (!pagoTocado) f.pagoMoneda.value = lineas[0].moneda;
         f.producto.value = '';
         buscar.value = '';
@@ -267,7 +276,8 @@ const Ventas = {
 
       // Si cambia el tipo, los precios sin rebaja manual se ajustan al nuevo tipo
       f.tipo.addEventListener('change', () => {
-        lineas.forEach(l => { if (l.auto) l.precioOrig = sugeridoEn(l.p, l.moneda); });
+        lineas.forEach(l => { if (l.auto) { l.precioOrig = sugeridoEn(l.p, l.moneda); l.oferta = null; } });
+        reaplicar();
         precioSugerido();
         pintarCarrito();
         actualizar();
@@ -344,6 +354,7 @@ const Ventas = {
             costoUnit: l.p.costo,
             moneda: l.moneda,
             precioOrig: l.precioOrig,
+            oferta: l.oferta || null,
             tipo,
             cliente,
             fiado,

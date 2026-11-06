@@ -591,4 +591,4 @@ const Seguridad = {
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => Seguridad.init());
+document.addEventListener('DOMContentLoaded', () => Store.listo.then(() => Seguridad.init()));

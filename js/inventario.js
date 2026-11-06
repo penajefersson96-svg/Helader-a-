@@ -296,6 +296,7 @@ Modules.inventario = {
           <span>Venta al detal: <b>${precio(detal)}</b></span>
           ${Inventario.tienePrecioMayor(p) ? `<span>Venta al mayor: <b>${precio(mayor)}</b></span>` : ''}
           <span>Ganancia por unidad (detal): <b>${Utils.usd(margen)}</b> · ${Utils.fmt(margenPct, 0)}%</span>
+          ${Ofertas.validas(p).length ? `<span>Ofertas: <b>${Ofertas.texto(p)}</b></span>` : ''}
           <span>Comprado el <b>${Utils.formatDate(p.fecha)}</b></span>
         </div>
 
@@ -382,6 +383,8 @@ Modules.inventario = {
           </div>
         </div>
 
+        ${Ofertas.formHtml(p, limpio)}
+
         <div class="preview" id="prod-preview"></div>
 
         <button type="submit" class="btn btn-primary btn-block">
@@ -416,6 +419,7 @@ Modules.inventario = {
       f.addEventListener('input', actualizar);
       f.addEventListener('change', actualizar);
       actualizar();
+      Ofertas.formMontar(body, f);
 
       f.addEventListener('submit', e => {
         e.preventDefault();
@@ -427,6 +431,8 @@ Modules.inventario = {
         const detal = Utils.num(f.detal.value);
         const mayor = Utils.num(f.mayor.value);
         const nombre = f.nombre.value.trim();
+        const of = Ofertas.formLeer(f);
+        if (of.error) return UI.toast(of.error, 'error');
 
         if (!nombre) return UI.toast('Escribe el nombre', 'error');
         if (cantidad <= 0) return UI.toast('La cantidad debe ser mayor a 0', 'error');
@@ -455,7 +461,8 @@ Modules.inventario = {
           tasaCompra,
           precioMoneda: precioMon,
           precioDetalOrig: detal,
-          precioMayorOrig: mayor > 0 ? mayor : null
+          precioMayorOrig: mayor > 0 ? mayor : null,
+          ofertas: of.lista
         };
 
         if (modo === 'editar') {

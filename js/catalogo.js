@@ -25,7 +25,8 @@ Modules.catalogo = {
       nombre: p.nombre,
       categoria: p.categoria || 'Otros',
       detal: Inventario.precioDetal(p),
-      mayor: Inventario.tienePrecioMayor(p) ? Inventario.precioMayor(p) : null
+      mayor: Inventario.tienePrecioMayor(p) ? Inventario.precioMayor(p) : null,
+      ofertas: Ofertas.texto(p, 'USD')
     })).sort((a, b) => a.categoria.localeCompare(b.categoria) || a.nombre.localeCompare(b.nombre));
   },
 
@@ -191,7 +192,12 @@ Modules.catalogo = {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#0c2a3f';
         ctx.font = `700 21px ${F}`;
-        ctx.fillText(this.ajustar(ctx, item.nombre, anchoNombre), PAD + 18, y + 36);
+                ctx.fillText(this.ajustar(ctx, item.nombre, anchoNombre), PAD + 18, item.ofertas ? y + 28 : y + 36);
+        if (item.ofertas) {
+          ctx.fillStyle = '#0d9488';
+          ctx.font = `700 13px ${F}`;
+          ctx.fillText(this.ajustar(ctx, item.ofertas, anchoNombre), PAD + 18, y + 49);
+        }
 
         // Precios
         const precio = (usd, x) => {

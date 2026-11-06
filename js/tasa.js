@@ -76,6 +76,7 @@ Modules.calculadora = {
           </div>
         </div>
 
+                ${Cambios.cardHtml()}
         <!-- TABLA RÁPIDA -->
         <div class="card">
           <div class="card-title">Referencia rápida</div>
@@ -104,6 +105,7 @@ Modules.calculadora = {
     const usd = container.querySelector('#calc-usd');
     const bs = container.querySelector('#calc-bs');
     const result = container.querySelector('#calc-result .stat-value');
+        Cambios.montar(container);
     
     // Guardar tasa a mano
     form.addEventListener('submit', e => {

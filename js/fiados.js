@@ -215,8 +215,8 @@ const Fiados = {
       const auto = () => {
         const d = prod();
         if (!d) return;
-        const unit = f.tipo.value === 'negocio' ? Inventario.precioMayor(d.p) : Inventario.precioDetal(d.p);
-        const usd = unit * Utils.num(f.cantidad.value);
+                const cant = Utils.num(f.cantidad.value);
+        const usd = f.tipo.value === 'negocio' ? Inventario.precioMayor(d.p) * cant : Ofertas.totalUsd(d.p, cant);
         f.monto.value = f.moneda.value === 'BS' ? redondea(Tasa.toBs(usd), 2) : redondea(usd, 2);
       };
 

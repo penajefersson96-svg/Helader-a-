@@ -34,7 +34,7 @@ const Cierre = {
     const sal = f => Caja.saldo(delDia.filter(f).map(m => ({ ...m, tipo: 'ingreso' })));
 
     const gastosUsd = suma(
-      delDia.filter(m => m.tipo === 'gasto' && !m.auto && m.categoria !== 'Ajuste de caja'),
+      delDia.filter(m => m.tipo === 'gasto' && !m.auto && m.categoria !== 'Ajuste de caja' && m.categoria !== 'Cambio de divisas'),
       m => (m.moneda === 'BS' ? Tasa.toUsd(m.monto) : m.monto)
     );
     const perdidasUsd = suma(Store.all('mermas').filter(m => m.fecha === fecha), m => m.costo);
@@ -48,10 +48,12 @@ const Cierre = {
       entro: ent(m => m.tipo === 'ingreso'),
       ventasCaja: ent(m => m.tipo === 'ingreso' && m.categoria === 'Ventas'),
       cobros: ent(m => m.categoria === 'Cobros de fiados'),
-      otrosIng: ent(m => m.tipo === 'ingreso' && m.categoria !== 'Ventas' && m.categoria !== 'Cobros de fiados'),
+               otrosIng: ent(m => m.tipo === 'ingreso' && m.categoria !== 'Ventas' && m.categoria !== 'Cobros de fiados' && m.categoria !== 'Cambio de divisas'),
+           cambioIn: ent(m => m.tipo === 'ingreso' && m.categoria === 'Cambio de divisas'),
+           cambioOut: sal(m => m.tipo === 'gasto' && m.categoria === 'Cambio de divisas'),
 
       salio: sal(m => m.tipo === 'gasto'),
-      gastosCaja: sal(m => m.tipo === 'gasto' && !m.auto && m.categoria !== 'Ajuste de caja'),
+      gastosCaja: sal(m => m.tipo === 'gasto' && !m.auto && m.categoria !== 'Ajuste de caja' && m.categoria !== 'Cambio de divisas'),
       compras: sal(m => m.tipo === 'gasto' && m.categoria === 'Mercancía'),
       devol: sal(m => m.tipo === 'gasto' && m.categoria === 'Ajuste de caja'),
 

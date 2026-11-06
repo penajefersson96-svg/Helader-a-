@@ -50,7 +50,7 @@ const Factura = {
       fecha: v0.fecha || Utils.today(),
       tasa: Tasa.valor(),
       lineas: lineas.map(v => ({
-        ventaId: v.id, nombre: v.nombre, cantidad: v.cantidad,
+        ventaId: v.id, nombre: v.nombre + (v.oferta ? ' (' + v.oferta + ')' : ''), cantidad: v.cantidad,
         precioUnit: v.precioUnit, total: v.total
       })),
       totalUsd: lineas.reduce((a, v) => a + v.total, 0),
@@ -142,7 +142,7 @@ const Factura = {
           fecha: f.fecha.value || Utils.today(),
           tasa: Tasa.valor(),
           lineas: sel.map(v => ({
-            ventaId: v.id, nombre: v.nombre, cantidad: v.cantidad,
+            ventaId: v.id, nombre: v.nombre + (v.oferta ? ' (' + v.oferta + ')' : ''), cantidad: v.cantidad,
             precioUnit: v.precioUnit, total: v.total
           })),
           totalUsd: sel.reduce((a, v) => a + v.total, 0),

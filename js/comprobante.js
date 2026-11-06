@@ -115,6 +115,7 @@ const Comprobante = {
     R('Ventas de contado', dual(r.ventasCaja));
     R('Cobros de fiados', dual(r.cobros));
     if (hay(r.otrosIng)) R('Otros ingresos', dual(r.otrosIng));
+    if (hay(r.cambioIn)) R('Cambio de divisas (recibido)', dual(r.cambioIn));
     R('TOTAL ENTRADAS', dual(r.entro), true);
     S_();
 
@@ -122,6 +123,7 @@ const Comprobante = {
     if (hay(r.gastosCaja)) R('Gastos', dual(r.gastosCaja));
     if (hay(r.compras)) R('Compra de mercancía', dual(r.compras));
     if (hay(r.devol)) R('Devoluciones / ajustes', dual(r.devol));
+    if (hay(r.cambioOut)) R('Cambio de divisas (entregado)', dual(r.cambioOut));
     if (!hay(r.salio)) R('Sin salidas', '—');
     R('TOTAL SALIDAS', dual(r.salio), true);
     S_();

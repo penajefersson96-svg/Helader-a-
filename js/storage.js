@@ -1,25 +1,78 @@
 /* =========================================================
    STORE - Guarda y lee los datos en el navegador
-   Todo se guarda en localStorage con el prefijo "Tienda_"
+   Todo se guarda en localStorage con el prefijo PREFIX (ver abajo)
    ========================================================= */
 
 const Store = {
-  PREFIX: 'heladeria_',
-  
+  PREFIX: 'heladeria_',   // <- déjalo con el valor que ya tenías
+
+  // Modo cifrado (Parte 18): los datos viven en memoria y se guardan sellados.
+  _mem: null,                       // { clave: 'texto JSON' } cuando está abierto
+  _bloqueado: false,                // cifrado y todavía sin la contraseña
+  _sucio: new Set(),
+  _volcando: false,
+
+  /* ---------- Acceso crudo (texto JSON) ---------- */
+  _leer(key) {
+    if (this._bloqueado) return null;
+    if (this._mem) { const v = this._mem[key]; return v === undefined ? null : v; }
+    return localStorage.getItem(this.PREFIX + key);
+  },
+
+  _escribir(key, texto) {
+    if (this._bloqueado) throw new Error('bloqueado');
+    if (this._mem) { this._mem[key] = texto; this._marcar(key); return; }
+    localStorage.setItem(this.PREFIX + key, texto);
+  },
+
+  _borrar(key) {
+    if (this._bloqueado) throw new Error('bloqueado');
+    if (this._mem) { delete this._mem[key]; this._marcar(key); return; }
+    localStorage.removeItem(this.PREFIX + key);
+  },
+
+  // Guarda sellado (cifrado) lo que cambió, en segundo plano y en orden
+  _marcar(key) {
+    this._sucio.add(key);
+    if (this._volcando) return;
+    this._volcando = true;
+    (async () => {
+      await Promise.resolve();   // junta escrituras seguidas
+      try {
+        while (this._sucio.size) {
+          const k = this._sucio.values().next().value;
+          this._sucio.delete(k);
+          const v = this._mem ? this._mem[k] : undefined;
+          try {
+            if (v === undefined) localStorage.removeItem(this.PREFIX + k);
+            else localStorage.setItem(this.PREFIX + k, await Boveda.sellar(k, v));
+          } catch (e) {
+            console.error('Error guardando', k, e);
+            UI.toast('No se pudo guardar. Revisa el espacio del navegador.', 'error');
+          }
+        }
+      } finally { this._volcando = false; }
+    })();
+  },
+
+  async esperarVolcado() {
+    while (this._volcando || this._sucio.size) await new Promise(r => setTimeout(r, 10));
+  },
+
   /* ---------- Lectura / escritura básica ---------- */
   get(key, fallback = null) {
     try {
-      const raw = localStorage.getItem(this.PREFIX + key);
+      const raw = this._leer(key);
       return raw === null ? fallback : JSON.parse(raw);
     } catch (e) {
       console.error('Error leyendo', key, e);
       return fallback;
     }
   },
-  
+
   set(key, value) {
     try {
-      localStorage.setItem(this.PREFIX + key, JSON.stringify(value));
+      this._escribir(key, JSON.stringify(value));
       window.dispatchEvent(new CustomEvent('store:change', { detail: { key } }));
       return true;
     } catch (e) {
@@ -28,7 +81,12 @@ const Store = {
       return false;
     }
   },
-  
+
+  // Igual que set, pero sin avisar a la pantalla (para guardar la sección actual)
+  setQuiet(key, value) {
+    try { this._escribir(key, JSON.stringify(value)); } catch (e) { /* nada */ }
+  },
+
   /* ---------- Listas (productos, ventas, fiados, gastos...) ---------- */
   all(name) {
     return this.get(name, []);
@@ -85,7 +143,7 @@ const Store = {
   exportAll() {
     const data = {};
     Object.keys(this.FORMATO).forEach(k => {
-      const raw = localStorage.getItem(this.PREFIX + k);
+      const raw = this._leer(k);
       if (raw === null) return;
       try { data[k] = JSON.parse(raw); } catch (e) { /* dato dañado: se omite */ }
     });
@@ -141,17 +199,17 @@ const Store = {
     const r = this.validarRespaldo(texto);
     if (r.error) return r;
 
-    const claves = Object.keys(this.FORMATO).map(k => this.PREFIX + k);
+    const claves = Object.keys(this.FORMATO);
     const antes = {};
-    claves.forEach(k => { antes[k] = localStorage.getItem(k); });
+    claves.forEach(k => { antes[k] = this._leer(k); });
 
     try {
-      claves.forEach(k => localStorage.removeItem(k));
-      Object.entries(r.datos).forEach(([k, v]) => localStorage.setItem(this.PREFIX + k, JSON.stringify(v)));
+      claves.forEach(k => this._borrar(k));
+      Object.entries(r.datos).forEach(([k, v]) => this._escribir(k, JSON.stringify(v)));
     } catch (e) {
       claves.forEach(k => {
-        if (antes[k] === null) localStorage.removeItem(k);
-        else localStorage.setItem(k, antes[k]);
+        if (antes[k] === null) this._borrar(k);
+        else this._escribir(k, antes[k]);
       });
       return { error: 'No se pudo restaurar (sin espacio). Tus datos quedaron como estaban.' };
     }
@@ -160,3 +218,9 @@ const Store = {
     return { ok: true };
   }
 };
+
+/* Promesa que se cumple cuando los datos ya se pueden usar.
+   Sin cifrado es inmediata; con cifrado, cuando se escribe la contraseña. */
+Store._bloqueado = localStorage.getItem(Store.PREFIX + '_boveda') !== null;
+Store.listo = new Promise(r => { Store._abrir = r; });
+if (!Store._bloqueado) Store._abrir();

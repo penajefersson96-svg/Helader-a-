@@ -55,7 +55,7 @@ const App = {
     if (!this.views[view]) return;
 if (Seguridad.rol && !Seguridad.puede(view)) view = Seguridad.inicio();
     this.current = view;
-    Store.PREFIX && localStorage.setItem(Store.PREFIX + 'vista', JSON.stringify(view));
+    Store.setQuiet('vista', view);
     history.replaceState(null, '', '#' + view);
     
     document.querySelectorAll('.nav-item').forEach(b =>
@@ -96,4 +96,4 @@ if (Seguridad.rol && !Seguridad.puede(view)) view = Seguridad.inicio();
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => App.init());
+document.addEventListener('DOMContentLoaded', () => Store.listo.then(() => App.init()));

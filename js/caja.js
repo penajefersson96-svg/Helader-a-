@@ -137,8 +137,9 @@ Modules.caja = {
 
     const desde = Caja.desde(this.periodo);
     const delPeriodo = todos.filter(m => (m.fecha || '') >= desde);
-    const ing = delPeriodo.filter(m => m.tipo === 'ingreso');
-    const gas = delPeriodo.filter(m => m.tipo === 'gasto');
+        // El cambio de divisas mueve dinero entre monedas: no es ganancia ni gasto
+    const ing = delPeriodo.filter(m => m.tipo === 'ingreso' && m.categoria !== 'Cambio de divisas');
+    const gas = delPeriodo.filter(m => m.tipo === 'gasto' && m.categoria !== 'Cambio de divisas');
     const sumaBs = arr => arr.reduce((a, m) => a + Caja.eqBs(m), 0);
     const desglose = arr => {
       const t = Caja.saldo(arr.map(m => ({ ...m, tipo: 'ingreso' })));
@@ -176,6 +177,7 @@ Modules.caja = {
       <div class="toolbar mt">
         <button class="btn btn-primary" data-action="ingreso"><i data-lucide="plus"></i> Ingreso</button>
         <button class="btn btn-danger" data-action="gasto"><i data-lucide="minus"></i> Gasto</button>
+        <button class="btn btn-soft" data-action="cambio"><i data-lucide="repeat"></i> Cambio $</button>
         <span class="spacer"></span>
         <select id="f-per">
           <option value="hoy" ${this.periodo === 'hoy' ? 'selected' : ''}>Hoy</option>
@@ -218,9 +220,12 @@ Modules.caja = {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const a = btn.dataset.action;
-      if (a === 'ingreso' || a === 'gasto') Caja.form(a);
+            if (a === 'ingreso' || a === 'gasto') Caja.form(a);
+      if (a === 'cambio') Cambios.abrir();
       if (a === 'borrar' && UI.confirm('¿Borrar este movimiento?')) {
-        Store.remove('movimientos', btn.dataset.id);
+        const mov = Store.find('movimientos', btn.dataset.id);
+        if (mov && mov.cambioId) Store.set('movimientos', Store.all('movimientos').filter(x => x.cambioId !== mov.cambioId));
+        else Store.remove('movimientos', btn.dataset.id);
         UI.toast('Movimiento borrado');
       }
     };
