@@ -55,6 +55,7 @@
     $('con-llave').classList.toggle('hidden', !g);
     $('estado-llave').textContent = !g ? '' : priv ? 'Tu llave está abierta en esta pantalla.' : 'Escribe tu frase para abrir tu llave.';
     $('pub-box').classList.toggle('hidden', !g);
+    $('rest-sec').classList.toggle('hidden', !!g);
     if (g) { $('t-pub').value = g.pub; $('t-blob').value = g.blob; }
   }
 
@@ -91,16 +92,19 @@
   $('b-cblob').onclick = () => copiar($('t-blob').value, 'm-llave');
   $('b-restaurar').onclick = () => $('rest-box').classList.toggle('hidden');
   $('b-rest-ok').onclick = async () => {
-    const f = $('f-abrir').value || $('f-nueva').value;
-    const frase = f || prompt('Frase secreta de esa copia:');
-    if (!frase) return;
+    const frase = $('f-rest').value;
+    const texto = $('t-rest').value.replace(/\s+/g, '');
+    if (!texto.startsWith('TMK1-')) return msg('m-llave', 'Esa no es una copia de seguridad (debe empezar con TMK1-)');
+    if (!frase) return msg('m-llave', 'Escribe la frase secreta de esa copia');
+    msg('m-llave', 'Restaurando…', true);
     try {
-      const { jwk, key } = await abrirPriv($('t-rest').value, frase);
-      localStorage.setItem(CLAVE, JSON.stringify({ pub: await pubDeJwk(jwk), blob: $('t-rest').value.replace(/\s+/g, '') }));
+      const { jwk, key } = await abrirPriv(texto, frase);
+      localStorage.setItem(CLAVE, JSON.stringify({ pub: await pubDeJwk(jwk), blob: texto }));
       priv = key;
+      $('t-rest').value = $('f-rest').value = '';
       $('rest-box').classList.add('hidden');
-      msg('m-llave', 'Llave restaurada', true);
-    } catch (e) { msg('m-llave', 'No se pudo abrir esa copia (frase incorrecta o copia dañada)'); }
+      msg('m-llave', 'Llave restaurada y abierta. Ya puedes contestar solicitudes.', true);
+    } catch (e) { msg('m-llave', 'No se pudo abrir esa copia (frase incorrecta o copia incompleta)'); }
     pintar();
   };
 

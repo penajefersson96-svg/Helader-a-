@@ -52,11 +52,15 @@
       <p><b>Copia de seguridad de tu llave</b> (cifrada con tu frase; guárdala en varios sitios. Si pierdes el teléfono y esto, no podrás ayudar a nadie):</p>
       <textarea id="t-blob" readonly rows="4"></textarea>
       <button class="soft" id="b-cblob">Copiar copia de seguridad</button>
-      <button class="soft" id="b-restaurar">Restaurar desde una copia</button>
     </div>
-    <div id="rest-box" class="hidden">
-      <textarea id="t-rest" rows="3" placeholder="Pega aquí la copia de seguridad"></textarea>
-      <button id="b-rest-ok">Restaurar</button>
+    <div id="rest-sec">
+      <button class="soft" id="b-restaurar">Ya tengo una copia de seguridad: restaurar mi llave</button>
+      <div id="rest-box" class="hidden">
+        <p class="muted">Pega la copia (empieza con TMK1-) y escribe la frase secreta con la que la creaste. Se recupera la MISMA llave, así que no tienes que tocar <code>maestra.js</code>.</p>
+        <textarea id="t-rest" rows="4" placeholder="Pega aquí la copia de seguridad (TMK1-...)"></textarea>
+        <input type="password" id="f-rest" placeholder="Frase secreta de esa copia" autocomplete="current-password">
+        <button id="b-rest-ok">Restaurar</button>
+      </div>
     </div>
     <p id="m-llave"></p>
   </div>
